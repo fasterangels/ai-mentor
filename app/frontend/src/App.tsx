@@ -11,6 +11,7 @@ import IdleState from "./ui/states/IdleState";
 import LoadingState from "./ui/states/LoadingState";
 import ErrorState from "./ui/states/ErrorState";
 import EmptyResultState from "./ui/states/EmptyResultState";
+import AppSettingsPanel from "./ui/settings/AppSettingsPanel";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
 
@@ -23,6 +24,8 @@ const STORAGE_KEYS = {
   filters: "ai-mentor.filters",
   lastResult: "ai-mentor.lastResult",
   snapshots: "ai-mentor.snapshots",
+  restoreWindowDefaults: "ai-mentor.restoreWindowDefaults",
+  exportFileNameTemplate: "ai-mentor.exportFileNameTemplate",
 } as const;
 const LAST_RESULT_MAX_BYTES = 200 * 1024;
 const SNAPSHOT_MAX_BYTES = 250 * 1024;
@@ -559,6 +562,7 @@ function App() {
   const [bundleImportMode, setBundleImportMode] = useState<"merge" | "replace">("merge");
   const [bundleDedupe, setBundleDedupe] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ id: string; kind: "success" | "warn" | "error"; message: string } | null>(null);
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
@@ -1504,6 +1508,8 @@ function App() {
     };
     const restoreSize = async () => {
       try {
+        const restoreOn = localStorage.getItem(STORAGE_KEYS.restoreWindowDefaults);
+        if (restoreOn === "false") return;
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const { width, height } = JSON.parse(raw) as { width?: number; height?: number };
@@ -1600,7 +1606,27 @@ function App() {
           <button type="button" className="ai-btn ai-btn--ghost" onClick={resetAll}>
             Reset all
           </button>
+          <button
+            type="button"
+            className="ai-btn ai-btn--ghost"
+            onClick={() => setShowSettings((s) => !s)}
+            aria-expanded={showSettings}
+            aria-label="Open settings"
+          >
+            Settings
+          </button>
         </div>
+        {/* BLOCK 3: Settings panel (single view, no routing) */}
+        {showSettings && (
+          <AppSettingsPanel
+            analyzerVersionFromResult={
+              result != null
+                ? mapApiToResultVM(result, { homeTeam: home, awayTeam: away }).analyzer.logicVersion ?? null
+                : null
+            }
+            onClose={() => setShowSettings(false)}
+          />
+        )}
         {/* BLOCK 8.8: IDLE */}
         {analyzeState === "IDLE" && <IdleState />}
 
@@ -2145,6 +2171,17 @@ function App() {
       )}
       <footer className="ai-footer" style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)" }}>
         App v{appVersion} · BUILD: {BUILD_ID}
+        {" · "}
+        <button
+          type="button"
+          className="ai-btn ai-btn--ghost"
+          style={{ padding: "0 4px", fontSize: "inherit", verticalAlign: "baseline" }}
+          onClick={() => setShowSettings((s) => !s)}
+          aria-expanded={showSettings}
+          aria-label="Open settings"
+        >
+          Settings
+        </button>
       </footer>
       </div>
     </div>
