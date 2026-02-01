@@ -601,3 +601,10 @@
     max-width: none;
   }
 }
+
+/* BLOCK 2: Hide debug/raw JSON when printing (print-to-PDF friendly) */
+@media print {
+  .ai-no-print {
+    display: none !important;
+  }
+}

@@ -11,7 +11,8 @@ import IdleState from "./ui/states/IdleState";
 import LoadingState from "./ui/states/LoadingState";
 import ErrorState from "./ui/states/ErrorState";
 import EmptyResultState from "./ui/states/EmptyResultState";
-import { buildAnalysisPdf } from "./utils/buildAnalysisPdf";
+import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
+import type { ResultVM } from "./ui/result/types";
 
 const BUILD_ID = (import.meta.env?.VITE_BUILD_ID as string) ?? "UNKNOWN_BUILD";
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
@@ -718,6 +719,38 @@ function App() {
         : `analysis_${ts}.pdf`;
 
     const doc = await buildAnalysisPdf(result);
+    const arrayBuffer = doc.output("arraybuffer");
+    const pdfBytes = new Uint8Array(arrayBuffer as ArrayBuffer);
+
+    if (isTauri()) {
+      try {
+        const { openSaveDialog, savePdfFile } = await import("./utils/tauriExport");
+        const path = await openSaveDialog(defaultFilename, [
+          { name: "PDF", extensions: ["pdf"] },
+        ]);
+        if (path) {
+          await savePdfFile(path, pdfBytes);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setExportPdfError(msg);
+      }
+      return;
+    }
+    doc.save(defaultFilename);
+  };
+
+  /** BLOCK 2: Export concise result summary as PDF (from ResultVM). */
+  const handleExportResultSummary = async (vm: ResultVM) => {
+    setExportPdfError(null);
+    const matchId = vm.matchId ?? vm.resolver?.matchId;
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const defaultFilename =
+      matchId != null && String(matchId).trim()
+        ? `result_${String(matchId).replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40)}.pdf`
+        : `result_${ts}.pdf`;
+
+    const doc = await buildResultSummaryPdf(vm);
     const arrayBuffer = doc.output("arraybuffer");
     const pdfBytes = new Uint8Array(arrayBuffer as ArrayBuffer);
 
@@ -1591,11 +1624,14 @@ function App() {
           {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
           {/* BLOCK 8.7: Canonical Result View (view-model, no raw JSON dump) */}
           <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
-            <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} />
+            <ResultView
+              vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })}
+              onExport={handleExportResultSummary}
+            />
           </div>
 
-          {/* Show raw JSON (debug) — collapsed by default; only place raw JSON is shown */}
-          <div className="ai-section">
+          {/* Show raw JSON (debug) — collapsed by default; hidden when printing (BLOCK 2) */}
+          <div className="ai-section ai-no-print">
             <div className="ai-card">
               <details>
                 <summary className="ai-summary">Show raw JSON (debug)</summary>
