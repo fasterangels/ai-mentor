@@ -1,0 +1,5 @@
+"""REST routes. api_v1 contains analyze and evaluation."""
+
+from .api_v1 import router as api_v1_router
+
+__all__ = ["api_v1_router"]

@@ -1,0 +1,21 @@
+[
+  {
+    "match_id": "sample-1",
+    "evidence_pack": {
+      "match_id": "sample-1",
+      "flags": [],
+      "captured_at_utc": "2025-01-01T12:00:00+00:00",
+      "domains": {
+        "stats": {
+          "data": {
+            "home_team_stats": { "goals_scored": 1.5, "goals_conceded": 1.0 },
+            "away_team_stats": { "goals_scored": 1.2, "goals_conceded": 1.2 },
+            "head_to_head": { "matches_played": 0 }
+          },
+          "quality": { "passed": true, "score": 0.8, "flags": [] },
+          "sources": []
+        }
+      }
+    }
+  }
+]

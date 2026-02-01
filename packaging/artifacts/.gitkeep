@@ -1,0 +1,1 @@
+# CI writes e2e_stdout.txt and backend.log here; keep folder in repo.
