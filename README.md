@@ -25,6 +25,19 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 
 **Install (Windows):** Download **AI-Mentor-Windows-setup.exe** for [v0.2.1](https://github.com/fasterangels/ai-mentor/releases) from Releases. Same installer flow as v0.2.0.
 
+---
+
+## Release v0.3.0 (Windows desktop)
+
+**Highlights:**
+
+- **Evaluation visibility (BLOCK 1):** Read-only KPIs (runtime, hash, stability, counts, flags) in the result view.
+- **Result export (BLOCK 2):** Export current result as PDF/summary from the result header; print-friendly (debug hidden).
+- **Settings surface (BLOCK 3):** Analyzer version (read-only), restore window on launch toggle, export file name template preview; localStorage only.
+- **UX polish (BLOCK 4):** Tighter copy, aligned card headers/spacing, accessibility (aria-labels, focus order).
+
+**Install (Windows):** Download **AI-Mentor-Windows-setup.exe** for [v0.3.0](https://github.com/fasterangels/ai-mentor/releases) from Releases. Same installer flow as v0.2.0.
+
 **Known limitations:**
 
 - Windows only (NSIS installer).
