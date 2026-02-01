@@ -1,0 +1,23 @@
+{
+  "status": "OK",
+  "match_id": "sample-match-123",
+  "resolver": {
+    "status": "RESOLVED",
+    "match_id": "sample-match-123",
+    "candidates": [],
+    "notes": []
+  },
+  "evidence_pack": null,
+  "analyzer": {
+    "status": "OK",
+    "version": "v2",
+    "policy_version": "v2",
+    "analysis_run": {
+      "flags": [],
+      "gate_results": [],
+      "conflict_summary": {},
+      "counts": {"PLAY": 0, "NO_BET": 0, "NO_PREDICTION": 0}
+    },
+    "decisions": []
+  }
+}

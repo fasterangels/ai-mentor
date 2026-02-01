@@ -12,11 +12,43 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 2. Run the installer (per-user, no admin required). The app and backend run via a Scheduled Task (`AI_Mentor_Backend`).
 3. Launch **AI Μέντορας** from the Start Menu or desktop shortcut.
 
+---
+
+## v0.2.1 Hotfix (Stability Guardrails only)
+
+**No new features.** This release contains CI/infra guardrails only:
+
+- **Canary preflight:** Fail-fast job at start of Windows E2E (backend exe + GET /health + OPTIONS /api/v1/analyze with Origin).
+- **Contract lock:** Pytest asserting analyze response critical keys (`resolver.status`, `analyzer.outcome` or `analyzer.decisions`, `match_id`).
+- **Artifact invariants:** CI step asserting `ci_build_stdout.txt`, `backend.log`, and NSIS installer exist on success.
+- **Rollback doc:** README section for deleting a release, moving/re-pushing a tag, re-running the release workflow.
+
+**Install (Windows):** Download **AI-Mentor-Windows-setup.exe** for [v0.2.1](https://github.com/fasterangels/ai-mentor/releases) from Releases. Same installer flow as v0.2.0.
+
 **Known limitations:**
 
 - Windows only (NSIS installer).
 - Backend must be running (started by installer/task); if the app shows "Backend starting…", wait a few seconds or restart the app.
 - First analysis may take longer while the backend warms up.
+
+### Rollback procedure (Windows release)
+
+If you need to undo or redo a Windows release:
+
+1. **Delete a release (GitHub)**  
+   - Go to [Releases](https://github.com/fasterangels/ai-mentor/releases), open the release (e.g. v0.2.0), click **Delete this release**.  
+   - This removes the release page and assets; the git tag remains unless you delete it.
+
+2. **Move or re-push a tag**  
+   - Delete the tag locally: `git tag -d v0.2.0`  
+   - Delete the tag on the remote: `git push origin :refs/tags/v0.2.0`  
+   - Re-tag the desired commit: `git tag -a v0.2.0 <commit> -m "Release v0.2.0"`  
+   - Push the tag: `git push origin v0.2.0`  
+   - Pushing a tag triggers the release workflow; ensure the tag points to the commit you want to build from.
+
+3. **Re-run the release workflow**  
+   - In GitHub: **Actions** → **release** → select the run for the tag → **Re-run all jobs**.  
+   - Or push the same tag again after deleting it remotely (see step 2) so the workflow runs on the current commit the tag points to.
 
 ---
 
