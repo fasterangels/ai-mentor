@@ -27,7 +27,10 @@ jobs:
           cache-dependency-path: app/frontend/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-action@stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Install NSIS
         run: choco install nsis -y
