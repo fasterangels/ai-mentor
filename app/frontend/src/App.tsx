@@ -560,7 +560,8 @@ function App() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [toast, setToast] = useState<{ id: string; kind: "success" | "warn" | "error"; message: string } | null>(null);
   const [apiBase, setApiBase] = useState(getInitialApiBase);
-  const [backendReady] = useState(true);
+  const [backendReady, setBackendReady] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>("—");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bundleFileInputRef = useRef<HTMLInputElement>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -576,6 +577,52 @@ function App() {
     getBackendBaseUrl()
       .then(setApiBase)
       .catch(() => setApiBase(DEFAULT_API_BASE));
+  }, []);
+
+  // Desktop hardening: health check with backoff (1s, 2s, 4s; max 3). Non-blocking; Analyze disabled until ready.
+  const healthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    const delays = [1000, 2000, 4000];
+    let cancelled = false;
+    const base = DEFAULT_API_BASE;
+    const run = (attempt: number) => {
+      if (cancelled || attempt >= 3) return;
+      const delay = delays[attempt];
+      healthTimeoutRef.current = setTimeout(() => {
+        if (cancelled) return;
+        fetch(`${base}/health`, { method: "GET" })
+          .then((res) => {
+            if (cancelled) return;
+            if (res.ok) setBackendReady(true);
+            else run(attempt + 1);
+          })
+          .catch(() => run(attempt + 1));
+      }, delay);
+    };
+    run(0);
+    return () => {
+      cancelled = true;
+      if (healthTimeoutRef.current) clearTimeout(healthTimeoutRef.current);
+      healthTimeoutRef.current = null;
+    };
+  }, []);
+
+  // In browser (non-Tauri) allow Analyze immediately; health may still be polling.
+  useEffect(() => {
+    if (!isTauri()) setBackendReady(true);
+  }, []);
+
+  // App version (Tauri: from API; browser: fallback).
+  useEffect(() => {
+    if (!isTauri()) {
+      setAppVersion("0.2.0");
+      return;
+    }
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then(setAppVersion)
+      .catch(() => setAppVersion("—"));
   }, []);
 
   // Log BUILD_ID to app log on startup (Tauri only).
@@ -1361,6 +1408,14 @@ function App() {
   const resultBlockRef = useRef<HTMLDivElement>(null);
   const prevAnalyzeStateRef = useRef(analyzeState);
 
+  // Logging hygiene: log only state transitions (DEV only).
+  useEffect(() => {
+    if (import.meta.env.DEV && prevAnalyzeStateRef.current !== analyzeState) {
+      // eslint-disable-next-line no-console
+      console.log("[AI Mentor] state:", prevAnalyzeStateRef.current, "->", analyzeState);
+    }
+  }, [analyzeState]);
+
   // BLOCK 8.9: Scroll result block to top when entering RESULT
   useEffect(() => {
     if (analyzeState === "RESULT" && prevAnalyzeStateRef.current !== "RESULT" && result) {
@@ -1453,6 +1508,11 @@ function App() {
       )}
       <div className="ai-container">
         <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>AI Μέντορας — Ανάλυση</h1>
+        {!backendReady && (
+          <div className="ai-card ai-card--warning" style={{ marginBottom: 12 }} role="status">
+            <p style={{ margin: 0 }}>Backend starting…</p>
+          </div>
+        )}
         <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>BUILD: {BUILD_ID}</p>
 
         <div className="ai-row ai-row--gap2" style={{ marginBottom: 12 }}>
@@ -2047,6 +2107,9 @@ function App() {
           </div>
         </div>
       )}
+      <footer className="ai-footer" style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)" }}>
+        App v{appVersion} · BUILD: {BUILD_ID}
+      </footer>
       </div>
     </div>
   );
