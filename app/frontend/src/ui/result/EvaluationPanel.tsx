@@ -13,11 +13,12 @@ export default function EvaluationPanel({ items }: EvaluationPanelProps) {
   if (items == null || items.length === 0) return null;
 
   return (
-    <div className="ai-card" style={{ flex: "1 1 100%", minWidth: 0, marginTop: "var(--s-3)" }}>
-      <div className="ai-cardHeader">
-        <div className="ai-cardTitle">Evaluation</div>
-      </div>
-      <ul style={{ margin: "4px 0 0 0", paddingLeft: 20, listStyle: "disc" }}>
+    <div className="ai-section">
+      <div className="ai-card" style={{ flex: "1 1 100%", minWidth: 0 }}>
+        <div className="ai-cardHeader">
+          <div className="ai-cardTitle">Evaluation</div>
+        </div>
+      <ul style={{ margin: "4px 0 0 0", paddingLeft: 20, listStyle: "disc", fontSize: 14 }}>
         {items.map((kpi, i) => (
           <li key={i} style={{ marginBottom: 4 }}>
             <span className="ai-status-label">{kpi.label}:</span>{" "}
@@ -28,6 +29,7 @@ export default function EvaluationPanel({ items }: EvaluationPanelProps) {
           </li>
         ))}
       </ul>
+      </div>
     </div>
   );
 }

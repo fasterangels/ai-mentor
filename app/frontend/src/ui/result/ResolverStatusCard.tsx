@@ -18,7 +18,7 @@ export default function ResolverStatusCard({ resolver }: ResolverStatusCardProps
       <div className="ai-cardHeader">
         <div className="ai-cardTitle">Resolver</div>
       </div>
-      <p style={{ margin: "4px 0" }}>
+      <p style={{ margin: "4px 0", fontSize: 14 }}>
         <span className="ai-status-label">Status:</span>{" "}
         <span className={statusClass ? `ai-chip ${statusClass}` : ""}>{status}</span>
         {resolver.matchId != null && resolver.matchId !== "" && (

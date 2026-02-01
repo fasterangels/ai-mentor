@@ -44,6 +44,7 @@ export default function ErrorState({
             className="ai-btn ai-btn--accent"
             style={{ marginTop: 10 }}
             onClick={onCopyDebug}
+            aria-label="Copy debug info"
           >
             Copy debug info
           </button>

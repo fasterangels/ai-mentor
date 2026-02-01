@@ -16,7 +16,7 @@ export default function AnalyzerOutcomeCard({ analyzer }: AnalyzerOutcomeCardPro
       <div className="ai-cardHeader">
         <div className="ai-cardTitle">Analyzer</div>
       </div>
-      <p style={{ margin: "4px 0" }}>
+      <p style={{ margin: "4px 0", fontSize: 14 }}>
         <span className="ai-status-label">Outcome:</span>{" "}
         <span className={outcomeClass ? `ai-chip ${outcomeClass}` : ""}>
           {isPrediction ? "PREDICTION_AVAILABLE" : isNoPrediction ? "NO_PREDICTION" : outcome}

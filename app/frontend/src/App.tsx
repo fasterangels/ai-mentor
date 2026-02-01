@@ -1592,15 +1592,26 @@ function App() {
             onClick={runAnalyze}
             disabled={loading || !backendReady}
             aria-busy={loading}
+            aria-label={loading ? "Analyzing…" : "Run analysis"}
           >
             {loading ? "Analyzing…" : "ANALYZE"}
           </button>
           {loading && (
-            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => abortRef.current?.abort()}>
+            <button
+              type="button"
+              className="ai-btn ai-btn--ghost"
+              onClick={() => abortRef.current?.abort()}
+              aria-label="Cancel analysis"
+            >
               Cancel
             </button>
           )}
-          <button type="button" className="ai-btn ai-btn--ghost" onClick={clearResults}>
+          <button
+            type="button"
+            className="ai-btn ai-btn--ghost"
+            onClick={clearResults}
+            aria-label="Clear results"
+          >
             Clear results
           </button>
           <button type="button" className="ai-btn ai-btn--ghost" onClick={resetAll}>

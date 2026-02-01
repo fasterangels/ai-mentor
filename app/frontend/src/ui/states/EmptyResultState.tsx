@@ -15,14 +15,10 @@ const MESSAGES: Record<EmptyKind, string> = {
 
 export default function EmptyResultState({ emptyKind }: EmptyResultStateProps) {
   const message = MESSAGES[emptyKind];
-
   return (
     <div className="ai-section">
       <div className="ai-card ai-card--warning" role="status">
-        <p style={{ margin: "0 0 4px 0", fontWeight: 600 }}>{emptyKind.replace(/_/g, " ")}</p>
-        <p className="ai-muted" style={{ margin: 0, fontSize: 14 }}>
-          {message}
-        </p>
+        <p className="ai-muted" style={{ margin: 0, fontSize: 14 }}>{message}</p>
       </div>
     </div>
   );
