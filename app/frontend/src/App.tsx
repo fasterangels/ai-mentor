@@ -12,6 +12,8 @@ import LoadingState from "./ui/states/LoadingState";
 import ErrorState from "./ui/states/ErrorState";
 import EmptyResultState from "./ui/states/EmptyResultState";
 import AppSettingsPanel from "./ui/settings/AppSettingsPanel";
+import AppShell from "./ui/shell/AppShell";
+import HomeScreen from "./ui/home/HomeScreen";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
 
@@ -563,6 +565,7 @@ function App() {
   const [bundleDedupe, setBundleDedupe] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [shellView, setShellView] = useState<"home" | "analyze">("home");
   const [toast, setToast] = useState<{ id: string; kind: "success" | "warn" | "error"; message: string } | null>(null);
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
@@ -1545,6 +1548,18 @@ function App() {
           <button type="button" className="ai-btn ai-btn--ghost ai-toast__close" onClick={() => { setToast(null); if (toastTimeoutRef.current) { clearTimeout(toastTimeoutRef.current); toastTimeoutRef.current = null; } }} aria-label="Dismiss">×</button>
         </div>
       )}
+      <AppShell
+        activeKey={shellView === "home" ? "home" : "predictions"}
+        onSidebarSelect={(key) => {
+          if (key === "home") setShellView("home");
+          if (key === "predictions") setShellView("analyze");
+        }}
+        pageTitle={shellView === "home" ? "Αρχική" : "Προβλέψεις"}
+        statusLabel={backendReady ? "Ready" : "Starting…"}
+      >
+        {shellView === "home" ? (
+          <HomeScreen />
+        ) : (
       <div className="ai-container">
         <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>AI Μέντορας — Ανάλυση</h1>
         {!backendReady && (
@@ -2195,6 +2210,8 @@ function App() {
         </button>
       </footer>
       </div>
+        )}
+      </AppShell>
     </div>
   );
 }
