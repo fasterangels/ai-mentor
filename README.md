@@ -38,6 +38,15 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 
 **Install (Windows):** Download **AI-Mentor-Windows-setup.exe** for [v0.3.0](https://github.com/fasterangels/ai-mentor/releases) from Releases. Same installer flow as v0.2.0.
 
+---
+
+## v0.3.1 Hotfix
+
+**No new features. No UI or backend changes.** Stability hotfix only.
+
+- Same installer flow as v0.3.0.
+- **Install (Windows):** Download **AI-Mentor-Windows-setup.exe** for [v0.3.1](https://github.com/fasterangels/ai-mentor/releases) from Releases.
+
 **Known limitations:**
 
 - Windows only (NSIS installer).
