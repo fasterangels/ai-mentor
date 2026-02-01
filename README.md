@@ -4,6 +4,22 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 
 ---
 
+## Release v0.2.0 (Windows desktop)
+
+**Install (Windows):**
+
+1. Open the [Releases](https://github.com/fasterangels/ai-mentor/releases) page and download **AI-Mentor-Windows-setup.exe** for v0.2.0.
+2. Run the installer (per-user, no admin required). The app and backend run via a Scheduled Task (`AI_Mentor_Backend`).
+3. Launch **AI Μέντορας** from the Start Menu or desktop shortcut.
+
+**Known limitations:**
+
+- Windows only (NSIS installer).
+- Backend must be running (started by installer/task); if the app shows "Backend starting…", wait a few seconds or restart the app.
+- First analysis may take longer while the backend warms up.
+
+---
+
 ## 🚀 Quick Start
 
 ### **For Normal Use (Recommended)**

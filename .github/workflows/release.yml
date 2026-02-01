@@ -1,0 +1,92 @@
+# Release: on tag v* build Windows desktop and publish GitHub Release with installer + logs.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Install backend dependencies
+        run: python -m pip install -U pip && pip install -r backend/requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: app/frontend
+        run: npm ci
+
+      - name: Build desktop (backend exe + Tauri NSIS + E2E test)
+        run: |
+          if not exist packaging\artifacts mkdir packaging\artifacts
+          python tooling/launchers/build_desktop_windows.py > packaging\artifacts\ci_build_stdout.txt 2>&1
+          type packaging\artifacts\ci_build_stdout.txt
+          exit /b %ERRORLEVEL%
+
+      - name: Copy backend.log and ensure artifact files exist
+        if: always()
+        run: |
+          if not exist packaging\artifacts mkdir packaging\artifacts
+          if exist "%LOCALAPPDATA%\AI_Mentor\logs\backend.log" (
+            copy /Y "%LOCALAPPDATA%\AI_Mentor\logs\backend.log" packaging\artifacts\backend.log
+          ) else (
+            echo Backend log not found. > packaging\artifacts\backend.log
+          )
+          if not exist packaging\artifacts\e2e_stdout.txt (
+            echo E2E did not run or failed before writing output. > packaging\artifacts\e2e_stdout.txt
+          )
+          if not exist packaging\artifacts\ci_build_stdout.txt (
+            echo Build step did not run or failed before writing output. > packaging\artifacts\ci_build_stdout.txt
+          )
+
+      - name: Prepare release assets
+        if: success()
+        run: |
+          for %%f in (app\frontend\src-tauri\target\release\bundle\nsis\*.exe) do (
+            copy /Y "%%f" packaging\artifacts\AI-Mentor-Windows-setup.exe
+            exit /b 0
+          )
+
+      - name: Create GitHub Release and upload assets
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: false
+          files: |
+            packaging/artifacts/AI-Mentor-Windows-setup.exe
+            packaging/artifacts/backend.log
+            packaging/artifacts/ci_build_stdout.txt
+            packaging/artifacts/e2e_stdout.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
