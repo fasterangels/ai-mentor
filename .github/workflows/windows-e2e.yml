@@ -78,6 +78,11 @@ jobs:
           type packaging\artifacts\ci_build_stdout.txt
           exit /b %ERRORLEVEL%
 
+      - name: Post-BLOCK smoke verification (backend + health + OPTIONS + POST /analyze)
+        run: |
+          python packaging/smoke_verify.py
+          if errorlevel 1 exit /b 1
+
       - name: Copy backend.log and ensure artifact files exist
         if: always()
         run: |
