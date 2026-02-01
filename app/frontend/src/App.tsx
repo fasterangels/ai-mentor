@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { getBackendBaseUrl, isTauri } from "./api/backendBaseUrl";
-import AnalyzeResultView from "./components/AnalyzeResultView";
+import { mapApiToResultVM } from "./ui/result/mapper";
+import ResultView from "./ui/result/ResultView";
+import {
+  getAnalyzeUIState,
+  type ErrorKind,
+} from "./ui/states/stateMachine";
+import IdleState from "./ui/states/IdleState";
+import LoadingState from "./ui/states/LoadingState";
+import ErrorState from "./ui/states/ErrorState";
+import EmptyResultState from "./ui/states/EmptyResultState";
 import { buildAnalysisPdf } from "./utils/buildAnalysisPdf";
 
 const BUILD_ID = (import.meta.env?.VITE_BUILD_ID as string) ?? "UNKNOWN_BUILD";
@@ -517,6 +526,7 @@ function App() {
   const [result, setResult] = useState<AnalyzeResponse | null>(getStoredResult);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [httpStatus, setHttpStatus] = useState<number | null>(null);
   const [lastErrorDebug, setLastErrorDebug] = useState<{
     httpStatus: number | null;
@@ -1114,6 +1124,7 @@ function App() {
     if (!backendReady) return;
     setLoading(true);
     setErrorMessage(null);
+    setErrorKind(null);
     setHttpStatus(null);
     setLastErrorDebug(null);
     if (abortRef.current) abortRef.current.abort();
@@ -1183,6 +1194,7 @@ function App() {
 
       if (!res.ok) {
         setResult(null);
+        setErrorKind("HTTP_ERROR");
         const msg =
           typeof (data as { detail?: string }).detail === "string"
             ? (data as { detail: string }).detail
@@ -1194,19 +1206,22 @@ function App() {
         return;
       }
 
+      setErrorKind(null);
       setResult(data);
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === "AbortError") return;
       setResult(null);
+      setErrorKind(null);
       setHttpStatus(null);
       const msg = e instanceof Error ? e.message : String(e);
       const isNetwork =
         msg === "Failed to fetch" ||
         String(msg).toLowerCase().includes("econnrefused") ||
         String(msg).toLowerCase().includes("network");
+      setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
       setErrorMessage(
         isNetwork
-          ? "Backend service is not running. Please reinstall."
+          ? "Backend unreachable. Check that the service is running."
           : msg
       );
       setLastErrorDebug({
@@ -1226,6 +1241,7 @@ function App() {
   const clearResults = () => {
     setResult(null);
     setErrorMessage(null);
+    setErrorKind(null);
     setHttpStatus(null);
     setLastErrorDebug(null);
     setSelectedDecision(null);
@@ -1242,6 +1258,7 @@ function App() {
     setSortBy("confidence_desc");
     setResult(null);
     setErrorMessage(null);
+    setErrorKind(null);
     setHttpStatus(null);
     setLastErrorDebug(null);
     setSelectedDecision(null);
@@ -1328,14 +1345,19 @@ function App() {
     return counts;
   }, [filteredDecisions]);
 
-  // BLOCK 8.7: explicit UX state (idle | loading | success | error)
-  const analyzeStatus: "idle" | "loading" | "success" | "error" = loading
-    ? "loading"
-    : errorMessage
-      ? "error"
-      : result
-        ? "success"
-        : "idle";
+  // BLOCK 8.8: UI state machine (IDLE | ANALYZING | RESULT | ERROR)
+  const uiStateResult = useMemo(
+    () =>
+      getAnalyzeUIState(
+        loading,
+        errorMessage,
+        httpStatus,
+        result as Record<string, unknown> | null,
+        errorKind ?? undefined
+      ),
+    [loading, errorMessage, httpStatus, result, errorKind]
+  );
+  const { state: analyzeState, errorKind: resolvedErrorKind, emptyKind } = uiStateResult;
 
   return (
     <div className="ai-root">
@@ -1410,59 +1432,39 @@ function App() {
             Reset all
           </button>
         </div>
-        {loading && (
-          <p className="ai-muted" style={{ margin: "0 0 8px 0" }} aria-live="polite">
-            Sending request… Cancel to abort.
-          </p>
+        {/* BLOCK 8.8: IDLE */}
+        {analyzeState === "IDLE" && <IdleState />}
+
+        {/* BLOCK 8.8: ANALYZING */}
+        {analyzeState === "ANALYZING" && <LoadingState />}
+
+        {/* BLOCK 8.8: ERROR — deterministic messages by errorKind */}
+        {analyzeState === "ERROR" && resolvedErrorKind && (
+          <ErrorState
+            errorKind={resolvedErrorKind}
+            httpStatus={httpStatus}
+            detail={resolvedErrorKind === "HTTP_ERROR" ? errorMessage ?? undefined : undefined}
+            onCopyDebug={copyDebugInfo}
+            hasDebug={!!lastErrorDebug}
+          />
         )}
 
-        {/* Final smoke test (BLOCK 10.0): See packaging/SMOKE_TEST_FINAL.md — App launches; Analyze works; structured result; Export JSON/PDF; no console errors. */}
-
-        {/* BLOCK 8.7: error state — user-friendly message, no stack traces */}
-        {analyzeStatus === "error" && errorMessage && (
-          <div className="ai-section">
-            <div className="ai-card ai-card--error" role="alert">
-              <strong>Σφάλμα:</strong> {errorMessage}
-              {httpStatus != null && (
-                <span className="ai-muted" style={{ display: "block", marginTop: 6 }}>HTTP {httpStatus}</span>
-              )}
-              {lastErrorDebug && (
-                <button type="button" className="ai-btn ai-btn--accent" style={{ marginTop: 10 }} onClick={copyDebugInfo}>
-                  Copy debug info
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* BLOCK 8.7: idle state — placeholder before any analysis */}
-        {analyzeStatus === "idle" && (
-          <div className="ai-section">
-            <div className="ai-card">
-              <p className="ai-muted" style={{ margin: 0 }}>Enter teams and run analysis.</p>
-            </div>
-          </div>
-        )}
-
-      {analyzeStatus === "success" && result && (
+        {/* BLOCK 8.8: RESULT — ResultView; empty state banner above when applicable */}
+      {analyzeState === "RESULT" && result && (
         <>
-          {/* BLOCK 8.7: Match section — home, away, match identifier */}
+          {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
+          {/* BLOCK 8.7: Canonical Result View (view-model, no raw JSON dump) */}
+          <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} />
+
+          {/* Show raw JSON (debug) — collapsed by default; only place raw JSON is shown */}
           <div className="ai-section">
             <div className="ai-card">
-              <div className="ai-cardHeader">
-                <div className="ai-cardTitle">Match</div>
-              </div>
-              <p style={{ margin: "4px 0" }}>
-                Home: {home || "—"} · Away: {away || "—"}
-                {(result.match_id ?? result.resolver?.match_id) != null && (
-                  <> · Match ID: {String(result.match_id ?? result.resolver?.match_id)}</>
-                )}
-              </p>
+              <details>
+                <summary className="ai-summary">Show raw JSON (debug)</summary>
+                <pre className="ai-pre ai-mono" style={{ marginTop: 8 }}>{safeStringify(result)}</pre>
+              </details>
             </div>
           </div>
-
-          {/* Structured result: Resolver, Evidence, Analyzer, NO_PREDICTION (valid outcome), raw JSON toggle */}
-          <AnalyzeResultView result={result} />
 
           {/* Export card (BLOCK 9.1 + 9.2) */}
           <div className="ai-section">
