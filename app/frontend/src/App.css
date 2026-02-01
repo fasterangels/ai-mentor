@@ -54,6 +54,22 @@
   margin-top: var(--s-5);
 }
 
+/* BLOCK 8.9: Result block spacing and separation */
+.ai-result-block {
+  margin-top: var(--s-5);
+}
+.ai-result-block > * + * {
+  margin-top: var(--s-5);
+}
+.ai-result-view-separator {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-4);
+  margin-top: 0;
+}
+.ai-status-label {
+  font-weight: 600;
+}
+
 /* Layout */
 .ai-root {
   background: var(--bg);

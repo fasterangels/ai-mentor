@@ -1121,7 +1121,7 @@ function App() {
   }, [result]);
 
   const runAnalyze = async () => {
-    if (!backendReady) return;
+    if (loading || !backendReady) return;
     setLoading(true);
     setErrorMessage(null);
     setErrorKind(null);
@@ -1358,6 +1358,82 @@ function App() {
     [loading, errorMessage, httpStatus, result, errorKind]
   );
   const { state: analyzeState, errorKind: resolvedErrorKind, emptyKind } = uiStateResult;
+  const resultBlockRef = useRef<HTMLDivElement>(null);
+  const prevAnalyzeStateRef = useRef(analyzeState);
+
+  // BLOCK 8.9: Scroll result block to top when entering RESULT
+  useEffect(() => {
+    if (analyzeState === "RESULT" && prevAnalyzeStateRef.current !== "RESULT" && result) {
+      resultBlockRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+    prevAnalyzeStateRef.current = analyzeState;
+  }, [analyzeState, result]);
+
+  // BLOCK 8.9: Enter = Analyze (from team inputs), Esc = clear results
+  const runAnalyzeRef = useRef(runAnalyze);
+  const clearResultsRef = useRef(clearResults);
+  runAnalyzeRef.current = runAnalyze;
+  clearResultsRef.current = clearResults;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const target = e.target as HTMLElement;
+        const isTeamInput =
+          target?.id === "ai-mentor-home" || target?.id === "ai-mentor-away";
+        if (isTeamInput) {
+          e.preventDefault();
+          runAnalyzeRef.current();
+        }
+      }
+      if (e.key === "Escape") {
+        if (analyzeState === "RESULT" || analyzeState === "ERROR") {
+          clearResultsRef.current();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [analyzeState]);
+
+  // BLOCK 8.9: Remember window size (Tauri only)
+  useEffect(() => {
+    if (!isTauri()) return;
+    const STORAGE_KEY = "ai-mentor.windowSize";
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const saveSize = () => {
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ width: window.innerWidth, height: window.innerHeight })
+          );
+        } catch {
+          /* ignore */
+        }
+        resizeTimeout = null;
+      }, 300);
+    };
+    const restoreSize = async () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const { width, height } = JSON.parse(raw) as { width?: number; height?: number };
+        if (typeof width !== "number" || typeof height !== "number") return;
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const w = getCurrentWindow();
+        await w.setSize({ type: "Logical", width, height });
+      } catch {
+        /* ignore */
+      }
+    };
+    restoreSize();
+    window.addEventListener("resize", saveSize);
+    return () => {
+      window.removeEventListener("resize", saveSize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+    };
+  }, []);
 
   return (
     <div className="ai-root">
@@ -1451,10 +1527,12 @@ function App() {
 
         {/* BLOCK 8.8: RESULT — ResultView; empty state banner above when applicable */}
       {analyzeState === "RESULT" && result && (
-        <>
+        <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label="Analysis result">
           {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
           {/* BLOCK 8.7: Canonical Result View (view-model, no raw JSON dump) */}
-          <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} />
+          <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
+            <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} />
+          </div>
 
           {/* Show raw JSON (debug) — collapsed by default; only place raw JSON is shown */}
           <div className="ai-section">
@@ -1967,7 +2045,7 @@ function App() {
             )}
           </div>
           </div>
-        </>
+        </div>
       )}
       </div>
     </div>
