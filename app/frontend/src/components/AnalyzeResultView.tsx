@@ -19,7 +19,7 @@ function na(value: unknown): string {
 }
 
 /** Detect if result indicates no prediction (for explanation block) */
-function isNoPrediction(result: any): boolean {
+function isNoPrediction(result: Record<string, unknown> | null | undefined): boolean {
   if (!result || typeof result !== "object") return false;
   const top = (result.status ?? "").toString().toUpperCase();
   const resolverStatus = (result.resolver?.status ?? "").toString().toUpperCase();
@@ -37,7 +37,7 @@ function isNoPrediction(result: any): boolean {
   return false;
 }
 
-function getNoPredictionMessage(result: any): string {
+function getNoPredictionMessage(result: Record<string, unknown> | null | undefined): string {
   if (!result) return "Not available";
   const resolverStatus = (result.resolver?.status ?? "").toString().toUpperCase();
   const top = (result.status ?? "").toString().toUpperCase();
@@ -51,7 +51,7 @@ function getNoPredictionMessage(result: any): string {
 }
 
 export interface AnalyzeResultViewProps {
-  result: any;
+  result: Record<string, unknown> | null | undefined;
 }
 
 export default function AnalyzeResultView({ result }: AnalyzeResultViewProps) {
@@ -148,7 +148,7 @@ export default function AnalyzeResultView({ result }: AnalyzeResultViewProps) {
           )}
           {decisions.length > 0 && (
             <p className="ai-muted" style={{ margin: "8px 0 0 0", fontSize: 13 }}>
-              {decisions.length} decision(s): {decisions.map((d: any) => d?.decision ?? "—").join(", ")}
+              {decisions.length} decision(s): {decisions.map((d: Record<string, unknown>) => (d?.decision ?? "—") as string).join(", ")}
             </p>
           )}
           {decisions.length === 0 && analyzer.status == null && (

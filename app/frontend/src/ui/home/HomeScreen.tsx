@@ -1,12 +1,18 @@
 /**
- * Home screen (Αρχική) — welcome header + 2x2 action cards. PURE UI; buttons placeholder.
+ * Home screen (Αρχική) — welcome header + 2x2 action cards. Navigation wired via onNavigate.
  */
 import HomeActionCard from "./HomeActionCard";
 
 const WELCOME_TITLE = "Καλώς ήρθες στο AI Μέντορας";
 const WELCOME_SUBTITLE = "Επίλεξε μια ενέργεια για να ξεκινήσεις.";
 
-export default function HomeScreen() {
+export type HomeNavigateView = "NEW_PREDICTION" | "RESULT" | "SUMMARY" | "HISTORY";
+
+export interface HomeScreenProps {
+  onNavigate?: (view: HomeNavigateView) => void;
+}
+
+export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   return (
     <div className="ai-home">
       <header className="ai-home-header">
@@ -19,25 +25,25 @@ export default function HomeScreen() {
           description="Δημιούργησε νέα ανάλυση αγώνα με ομάδες και παράθυρο kickoff."
           buttonLabel="Νέα Πρόβλεψη"
           primary
-          onClick={() => {}}
+          onClick={() => onNavigate?.("NEW_PREDICTION")}
         />
         <HomeActionCard
           title="Αποτέλεσμα Πρόβλεψης"
           description="Δες το τελευταίο αποτέλεσμα ανάλυσης και αποφάσεις αγορών."
           buttonLabel="Άνοιγμα αποτελέσματος"
-          onClick={() => {}}
+          onClick={() => onNavigate?.("RESULT")}
         />
         <HomeActionCard
           title="Σύνοψη Απόδοσης"
           description="Συνοπτικά KPIs και στατιστικά από τις προβλέψεις σου."
           buttonLabel="Άνοιγμα σύνοψης"
-          onClick={() => {}}
+          onClick={() => onNavigate?.("SUMMARY")}
         />
         <HomeActionCard
           title="Ιστορικό Προβλέψεων"
           description="Λίστα προηγούμενων αναλύσεων και αποτελεσμάτων."
           buttonLabel="Άνοιγμα ιστορικού"
-          onClick={() => {}}
+          onClick={() => onNavigate?.("HISTORY")}
         />
       </div>
     </div>

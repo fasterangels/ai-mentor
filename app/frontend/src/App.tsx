@@ -18,6 +18,33 @@ import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPd
 import type { ResultVM } from "./ui/result/types";
 
 const BUILD_ID = (import.meta.env?.VITE_BUILD_ID as string) ?? "UNKNOWN_BUILD";
+
+/** Navigation view (no router). */
+export type View = "HOME" | "NEW_PREDICTION" | "RESULT" | "SUMMARY" | "HISTORY" | "SETTINGS";
+
+function viewToSidebarKey(view: View): string {
+  switch (view) {
+    case "HOME": return "home";
+    case "NEW_PREDICTION":
+    case "RESULT": return "predictions";
+    case "SUMMARY": return "statistics";
+    case "HISTORY": return "history";
+    case "SETTINGS": return "settings";
+    default: return "home";
+  }
+}
+
+function viewToPageTitle(view: View): string {
+  switch (view) {
+    case "HOME": return "Αρχική";
+    case "NEW_PREDICTION": return "Προβλέψεις";
+    case "RESULT": return "Αποτέλεσμα Πρόβλεψης";
+    case "SUMMARY": return "Σύνοψη Απόδοσης";
+    case "HISTORY": return "Ιστορικό Προβλέψεων";
+    case "SETTINGS": return "Ρυθμίσεις";
+    default: return "Αρχική";
+  }
+}
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 const getInitialApiBase = () => DEFAULT_API_BASE;
 const STORAGE_KEYS = {
@@ -565,7 +592,7 @@ function App() {
   const [bundleDedupe, setBundleDedupe] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [shellView, setShellView] = useState<"home" | "analyze">("home");
+  const [view, setView] = useState<View>("HOME");
   const [toast, setToast] = useState<{ id: string; kind: "success" | "warn" | "error"; message: string } | null>(null);
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
@@ -1549,17 +1576,111 @@ function App() {
         </div>
       )}
       <AppShell
-        activeKey={shellView === "home" ? "home" : "predictions"}
+        activeKey={viewToSidebarKey(view)}
         onSidebarSelect={(key) => {
-          if (key === "home") setShellView("home");
-          if (key === "predictions") setShellView("analyze");
+          if (key === "home") setView("HOME");
+          if (key === "predictions") setView("NEW_PREDICTION");
+          if (key === "statistics") setView("SUMMARY");
+          if (key === "history") setView("HISTORY");
+          if (key === "settings") setView("SETTINGS");
         }}
-        pageTitle={shellView === "home" ? "Αρχική" : "Προβλέψεις"}
+        pageTitle={viewToPageTitle(view)}
         statusLabel={backendReady ? "Ready" : "Starting…"}
       >
-        {shellView === "home" ? (
-          <HomeScreen />
-        ) : (
+        {view === "HOME" && <HomeScreen onNavigate={setView} />}
+        {view === "RESULT" && !result && (
+          <div className="ai-container">
+            <div className="ai-card ai-card--warning" role="status">
+              <p className="ai-muted" style={{ margin: 0 }}>Δεν υπάρχει αποτέλεσμα. Κάνε μια νέα πρόβλεψη.</p>
+              <button type="button" className="ai-btn ai-btn--primary" style={{ marginTop: 12 }} onClick={() => setView("NEW_PREDICTION")}>
+                Νέα Πρόβλεψη
+              </button>
+            </div>
+          </div>
+        )}
+        {view === "RESULT" && result && (
+          <div className="ai-container">
+            <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label="Analysis result">
+              {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
+              <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
+                <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} onExport={handleExportResultSummary} />
+              </div>
+              <div className="ai-section ai-no-print">
+                <div className="ai-card">
+                  <details>
+                    <summary className="ai-summary">Show raw JSON (debug)</summary>
+                    <pre className="ai-pre ai-mono" style={{ marginTop: 8 }}>{safeStringify(result)}</pre>
+                  </details>
+                </div>
+              </div>
+              <div className="ai-section">
+                <div className="ai-card">
+                  <div className="ai-cardHeader"><div className="ai-cardTitle">Export</div></div>
+                  <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleCopySummary} aria-label="Copy summary">{copiedKey === "summary" ? "Copied" : "Copy summary"}</button>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadResultJson} aria-label="Download result JSON">Download result JSON</button>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleExportAnalysisPdf} aria-label="Export analysis (PDF)">Export analysis (PDF)</button>
+                    <button type="button" className="ai-btn ai-btn--accent" onClick={handleSaveSnapshot} aria-label="Save snapshot">Save snapshot</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {view === "SUMMARY" && (
+          <div className="ai-container">
+            <div className="ai-card">
+              <h2 className="ai-cardTitle" style={{ marginBottom: 8 }}>Σύνοψη Απόδοσης</h2>
+              <p className="ai-muted" style={{ margin: 0 }}>Συνοπτικά KPIs και στατιστικά. (Προσεχώς)</p>
+            </div>
+          </div>
+        )}
+        {view === "HISTORY" && (
+          <div className="ai-container">
+            <div className="ai-card">
+              <div className="ai-cardHeader"><div className="ai-cardTitle">Ιστορικό Προβλέψεων</div></div>
+              {snapshotError && (
+                <p className="ai-muted" style={{ margin: "0 0 8px 0", color: "var(--error)" }} role="alert">{snapshotError}</p>
+              )}
+              <details open>
+                <summary className="ai-summary">Snapshots ({snapshots.length})</summary>
+                <div style={{ marginTop: 8 }}>
+                  {snapshots.length === 0 ? (
+                    <p className="ai-muted" style={{ margin: "8px 0" }}>No snapshots saved.</p>
+                  ) : (
+                    <>
+                      {snapshots.slice().reverse().map((snap) => (
+                        <div key={snap.id} className="ai-snapshotRow">
+                          <span className="ai-muted" style={{ fontSize: 11 }}>
+                            {new Date(snap.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                            {" · "}{snap.homeTeam} vs {snap.awayTeam}
+                            {" · "}{snap.resolver?.status ?? snap.status ?? "—"}
+                            {" · "}{(snap.size_bytes / 1024).toFixed(1)} KB
+                          </span>
+                          <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => { loadSnapshot(snap); setView("NEW_PREDICTION"); }}>Load</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>Download</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>Delete</button>
+                          </span>
+                        </div>
+                      ))}
+                      <button type="button" className="ai-btn ai-btn--ghost" style={{ marginTop: 8 }} onClick={deleteAllSnapshots}>Delete all</button>
+                    </>
+                  )}
+                </div>
+              </details>
+            </div>
+          </div>
+        )}
+        {view === "SETTINGS" && (
+          <div className="ai-container">
+            <AppSettingsPanel
+              analyzerVersionFromResult={result != null ? mapApiToResultVM(result, { homeTeam: home, awayTeam: away }).analyzer.logicVersion ?? null : null}
+              onClose={() => setView("HOME")}
+            />
+          </div>
+        )}
+        {view === "NEW_PREDICTION" && (
       <div className="ai-container">
         <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>AI Μέντορας — Ανάλυση</h1>
         {!backendReady && (
