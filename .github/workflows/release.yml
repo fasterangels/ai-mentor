@@ -47,12 +47,22 @@ jobs:
         working-directory: app/frontend
         run: npm ci
 
-      - name: Build desktop (backend exe + Tauri NSIS + E2E test)
+      - name: Build backend exe and copy to Tauri bin
         run: |
           if not exist packaging\artifacts mkdir packaging\artifacts
-          python tooling/launchers/build_desktop_windows.py > packaging\artifacts\ci_build_stdout.txt 2>&1
-          type packaging\artifacts\ci_build_stdout.txt
-          exit /b %ERRORLEVEL%
+          python -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+          if not exist app\frontend\src-tauri\bin mkdir app\frontend\src-tauri\bin
+          copy /Y dist\ai-mentor-backend.exe app\frontend\src-tauri\bin\ai-mentor-backend-x86_64-pc-windows-msvc.exe
+          copy /Y dist\ai-mentor-backend.exe app\frontend\src-tauri\bin\ai-mentor-backend.exe
+          copy /Y packaging\windows_task\launch_backend.cmd app\frontend\src-tauri\bin\launch_backend.cmd
+
+      - name: Build frontend
+        working-directory: app/frontend
+        run: npm run build
+
+      - name: Build Tauri NSIS installer
+        working-directory: app/frontend
+        run: npx tauri build
 
       - name: Copy backend.log and ensure artifact files exist
         if: always()
