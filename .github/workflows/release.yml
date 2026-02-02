@@ -70,51 +70,27 @@ jobs:
             echo Build step did not run or failed before writing output. > packaging\artifacts\ci_build_stdout.txt
           )
 
-      - name: List NSIS output and assert installer exists
+      - name: Locate NSIS installer (auto-discovery)
         if: success()
         shell: pwsh
         run: |
-          $nsisDir = Join-Path $env:GITHUB_WORKSPACE "app/frontend/src-tauri/target/release/bundle/nsis"
-          Write-Host "Listing NSIS directory: $nsisDir"
-          if (-not (Test-Path $nsisDir)) {
-            Write-Error "NSIS directory does not exist: $nsisDir"
+          $candidates = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.exe -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\target\\' -and $_.FullName -match '\\bundle\\nsis\\' }
+          if (-not $candidates -or $candidates.Count -eq 0) {
+            Write-Error "No NSIS installer .exe found under workspace (path must contain \target\ and \bundle\nsis\). Build may have failed."
             exit 1
           }
-          Get-ChildItem -LiteralPath $nsisDir | ForEach-Object { Write-Host $_.FullName }
-          $exes = Get-ChildItem -Path (Join-Path $nsisDir "*.exe") -ErrorAction SilentlyContinue
-          if (-not $exes -or $exes.Count -eq 0) {
-            Write-Error "FAIL: No .exe found in nsis folder. Build may have failed or output path differs."
-            exit 1
-          }
-          Write-Host "Found $($exes.Count) .exe(s). First: $($exes[0].FullName)"
-
-      - name: Copy NSIS installer to artifacts
-        if: success()
-        shell: pwsh
-        run: |
-          $nsisDir = Join-Path $env:GITHUB_WORKSPACE "app/frontend/src-tauri/target/release/bundle/nsis"
+          $exe = $candidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+          Write-Host "Chosen installer: $($exe.FullName) (LastWriteTime: $($exe.LastWriteTime))"
           $artifactsDir = Join-Path $env:GITHUB_WORKSPACE "packaging/artifacts"
-          $dest = Join-Path $artifactsDir "AI-Mentor-Windows-setup.exe"
           if (-not (Test-Path $artifactsDir)) { New-Item -ItemType Directory -Path $artifactsDir -Force | Out-Null }
-          $exe = (Get-ChildItem -Path (Join-Path $nsisDir "*.exe") -ErrorAction Stop)[0]
+          $dest = Join-Path $artifactsDir "AI-Mentor-Windows-setup.exe"
           Copy-Item -LiteralPath $exe.FullName -Destination $dest -Force
-          Write-Host "Copied: $($exe.FullName) -> $dest"
           if (-not (Test-Path $dest) -or (Get-Item $dest).Length -eq 0) {
-            Write-Error "FAIL: Copy did not produce a non-empty file at $dest"
+            Write-Error "Copy did not produce a non-empty file at $dest"
             exit 1
           }
-          Write-Host "Destination size: $((Get-Item $dest).Length) bytes"
-
-      - name: Verify release asset before upload
-        if: success()
-        shell: pwsh
-        run: |
-          $path = Join-Path $env:GITHUB_WORKSPACE "packaging/artifacts/AI-Mentor-Windows-setup.exe"
-          if (-not (Test-Path $path)) {
-            Write-Error "FAIL: AI-Mentor-Windows-setup.exe missing at packaging/artifacts/. Cannot upload."
-            exit 1
-          }
-          Write-Host "OK: $path exists ($((Get-Item $path).Length) bytes)"
+          Write-Host "Copied to: $dest ($((Get-Item $dest).Length) bytes)"
 
       - name: Create GitHub Release and upload assets
         if: success()
