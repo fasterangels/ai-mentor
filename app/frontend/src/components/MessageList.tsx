@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { t } from '@/i18n';
 import { Message } from '@/types';
 import { Brain, Globe, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,12 +30,12 @@ export function MessageList({ messages }: MessageListProps) {
   const getThinkingStateLabel = (state?: string) => {
     switch (state) {
       case 'online':
-        return '🌐 Online έρευνα';
+        return '🌐 ' + t("message.online_research");
       case 'memory_knowledge':
-        return '📚 Χρήση μνήμης/γνώσης';
+        return '📚 ' + t("message.memory_knowledge");
       case 'offline':
       default:
-        return '🧠 Offline σκέψη';
+        return '🧠 ' + t("message.offline_thought");
     }
   };
 
@@ -42,7 +43,7 @@ export function MessageList({ messages }: MessageListProps) {
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {messages.length === 0 ? (
         <div className="text-center text-gray-500 mt-8">
-          <p>Ξεκίνα τη συνομιλία γράφοντας ένα μήνυμα...</p>
+          <p>{t("message.start_conversation")}</p>
         </div>
       ) : (
         messages.map((message) => (

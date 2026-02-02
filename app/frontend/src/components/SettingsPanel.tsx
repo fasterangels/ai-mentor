@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '@/i18n';
 import { useOllama } from '@/hooks/useOllama';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -61,7 +62,7 @@ export function SettingsPanel() {
                 <h3 className="font-semibold mb-3">Πληροφορίες</h3>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p><strong>Μοντέλο:</strong> llama3:latest</p>
-                  <p><strong>Backend:</strong> http://127.0.0.1:8000</p>
+                  <p><strong>{t("settings.backend_value")}</strong> http://127.0.0.1:8000</p>
                   <p><strong>Frontend:</strong> http://localhost:3000</p>
                   <p><strong>Ollama:</strong> http://127.0.0.1:11434</p>
                 </div>

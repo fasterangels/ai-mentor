@@ -16,7 +16,7 @@ import AppShell from "./ui/shell/AppShell";
 import HomeScreen from "./ui/home/HomeScreen";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
-import { t, labelResolverStatus, labelDecisionKind } from "./i18n";
+import { t, labelResolverStatus, labelDecisionKind, labelNoteOrWarning } from "./i18n";
 import { buildInfoFormatted } from "./buildInfo";
 
 /** Navigation view (no router). */
@@ -285,49 +285,49 @@ function buildTextSummary(params: {
   const decisions = safeArray(result?.analyzer?.decisions);
   const candidates = safeArray(result?.resolver?.candidates);
   const lines: string[] = [];
-  lines.push("AI ΜΕΝΤΟΡΑΣ — ANALYSIS SNAPSHOT");
-  lines.push("Timestamp: " + timestamp);
-  lines.push("Match input: " + (homeTeam || "—") + " vs " + (awayTeam || "—"));
-  lines.push("Backend status: " + (result?.status ?? "—"));
-  lines.push("HTTP status: " + (httpStatus != null ? String(httpStatus) : "—"));
+  lines.push(t("snapshot.title"));
+  lines.push(t("summary.timestamp") + ": " + timestamp);
+  lines.push(t("summary.match_input") + ": " + (homeTeam || "—") + " vs " + (awayTeam || "—"));
+  lines.push(t("summary.backend_status") + ": " + (result?.status ?? "—"));
+  lines.push(t("summary.http_status") + ": " + (httpStatus != null ? String(httpStatus) : "—"));
   lines.push("");
-  lines.push("Resolver:");
-  lines.push("- status: " + (result?.resolver?.status ?? "—"));
-  lines.push("- match_id: " + (result?.match_id ?? result?.resolver?.match_id ?? "—"));
-  lines.push("- notes: " + (safeArray(result?.resolver?.notes).length ? "present" : "—"));
-  lines.push("- candidates: " + candidates.length);
+  lines.push(t("section.resolver") + ":");
+  lines.push("- " + t("label.status") + ": " + (result?.resolver?.status ?? "—"));
+  lines.push("- " + t("label.match_id") + ": " + (result?.match_id ?? result?.resolver?.match_id ?? "—"));
+  lines.push("- " + t("summary.notes") + ": " + (safeArray(result?.resolver?.notes).length ? t("summary.present") : "—"));
+  lines.push("- " + t("report.candidates") + ": " + candidates.length);
   lines.push("");
-  lines.push("Outcome:");
+  lines.push(t("summary.outcome") + ":");
   if (outcomeBanner.kind ?? outcomeBanner.message) {
     lines.push("- " + (outcomeBanner.kind ?? "—") + ": " + (outcomeBanner.message ?? "—"));
   } else {
-    lines.push("- (none)");
+    lines.push("- " + t("report.none"));
   }
   lines.push("");
-  lines.push("Decisions (filtered view):");
-  lines.push("- total decisions: " + filteredDecisions.length);
-  lines.push("- counts: PLAY " + kindCounts.PLAY + " | NO_BET " + kindCounts.NO_BET + " | NO_PREDICTION " + kindCounts.NO_PREDICTION + " | UNKNOWN " + kindCounts.UNKNOWN);
+  lines.push(t("summary.decisions_filtered") + ":");
+  lines.push("- " + t("summary.total_decisions") + ": " + filteredDecisions.length);
+  lines.push("- " + t("summary.counts") + ": " + labelDecisionKind("PLAY") + " " + kindCounts.PLAY + " | " + labelDecisionKind("NO_BET") + " " + kindCounts.NO_BET + " | " + labelDecisionKind("NO_PREDICTION") + " " + kindCounts.NO_PREDICTION);
   const marketList = filteredMarketKeys.slice(0, 12);
-  const more = filteredMarketKeys.length > 12 ? " (+" + (filteredMarketKeys.length - 12) + " more)" : "";
-  lines.push("- markets: " + (marketList.join(", ") || "—") + more);
+  const more = filteredMarketKeys.length > 12 ? " (+" + (filteredMarketKeys.length - 12) + " " + t("summary.more") + ")" : "";
+  lines.push("- " + t("summary.markets") + ": " + (marketList.join(", ") || "—") + more);
   lines.push("");
   if (selectedMarket != null || selectedDecision != null) {
-    lines.push("Selected decision:");
-    lines.push("- market: " + (selectedMarket ?? "—"));
-    lines.push("- kind: " + (selectedDecision ? getDecisionKind(selectedDecision.decision) : "—"));
-    lines.push("- decision: " + (selectedDecision?.decision ?? "—"));
-    lines.push("- confidence: " + (selectedDecision ? formatConfidence(selectedDecision.confidence) : "—"));
-    lines.push("- flags: " + (selectedDecision ? flattenFlags(selectedDecision).join(", ") || "—" : "—"));
+    lines.push(t("report.selected_decision") + ":");
+    lines.push("- " + t("summary.market") + ": " + (selectedMarket ?? "—"));
+    lines.push("- " + t("summary.kind") + ": " + (selectedDecision ? labelDecisionKind(selectedDecision.decision ?? "") : "—"));
+    lines.push("- " + t("summary.decision") + ": " + (selectedDecision?.decision ?? "—"));
+    lines.push("- " + t("summary.confidence") + ": " + (selectedDecision ? formatConfidence(selectedDecision.confidence) : "—"));
+    lines.push("- " + t("summary.flags") + ": " + (selectedDecision ? flattenFlags(selectedDecision).join(", ") || "—" : "—"));
     const reasons = safeArray<string>(selectedDecision?.reasons).slice(0, 10);
-    lines.push("- reasons: " + (reasons.length ? reasons.join("; ") : "—"));
+    lines.push("- " + t("summary.reasons") + ": " + (reasons.length ? reasons.join("; ") : "—"));
   } else {
-    lines.push("Selected decision: (none)");
+    lines.push(t("report.selected_decision") + ": " + t("report.none"));
   }
   lines.push("");
-  lines.push("Evidence/Analysis:");
-  lines.push("- analyzer status: " + (result?.analyzer?.status ?? "—"));
-  lines.push("- logic/policy version: " + (result?.analyzer?.analysis_run?.logic_version ?? "—"));
-  lines.push("- evidence_pack present: " + (result?.evidence_pack ? "yes" : "no"));
+  lines.push(t("summary.evidence_analysis") + ":");
+  lines.push("- " + t("summary.analyzer_status") + ": " + (result?.analyzer?.status ?? "—"));
+  lines.push("- " + t("summary.logic_version") + ": " + (result?.analyzer?.analysis_run?.logic_version ?? "—"));
+  lines.push("- " + t("summary.evidence_pack_present") + ": " + (result?.evidence_pack ? t("summary.yes") : t("summary.no")));
   if (result?.evidence_pack) {
     lines.push("  (domains: " + safeArray(result.evidence_pack.domains).length + ")");
   }
@@ -376,37 +376,39 @@ function safeParseJson(text: string): { ok: true; value: unknown } | { ok: false
   }
 }
 
+const VALIDATION_FAILED_KEY = "error.import_validation_failed";
+
 function validateAnalyzeResponse(x: unknown): { ok: true; value: AnalyzeResponse } | { ok: false; error: string } {
-  if (!isPlainObject(x)) return { ok: false, error: "Not an object" };
-  if (x.status !== undefined && typeof x.status !== "string") return { ok: false, error: "status must be string" };
+  if (!isPlainObject(x)) return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (x.status !== undefined && typeof x.status !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
   if (x.resolver !== undefined) {
-    if (!isPlainObject(x.resolver)) return { ok: false, error: "resolver must be object" };
-    if (x.resolver.status !== undefined && typeof x.resolver.status !== "string") return { ok: false, error: "resolver.status must be string" };
+    if (!isPlainObject(x.resolver)) return { ok: false, error: VALIDATION_FAILED_KEY };
+    if (x.resolver.status !== undefined && typeof x.resolver.status !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
   }
-  if (x.analyzer !== undefined && !isPlainObject(x.analyzer)) return { ok: false, error: "analyzer must be object" };
+  if (x.analyzer !== undefined && !isPlainObject(x.analyzer)) return { ok: false, error: VALIDATION_FAILED_KEY };
   if (x.analyzer?.decisions !== undefined && !Array.isArray((x.analyzer as Record<string, unknown>).decisions))
-    return { ok: false, error: "analyzer.decisions must be array" };
+    return { ok: false, error: VALIDATION_FAILED_KEY };
   return { ok: true, value: x as AnalyzeResponse };
 }
 
 function validateSnapshot(x: unknown): { ok: true; value: Snapshot } | { ok: false; error: string } {
-  if (!isPlainObject(x)) return { ok: false, error: "Not an object" };
-  if (typeof (x as Snapshot).id !== "string") return { ok: false, error: "id must be string" };
-  if (typeof (x as Snapshot).created_at !== "string") return { ok: false, error: "created_at must be string" };
-  if (typeof (x as Snapshot).homeTeam !== "string") return { ok: false, error: "homeTeam must be string" };
-  if (typeof (x as Snapshot).awayTeam !== "string") return { ok: false, error: "awayTeam must be string" };
-  if (!isPlainObject((x as Snapshot).result)) return { ok: false, error: "result must be object" };
+  if (!isPlainObject(x)) return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (typeof (x as Snapshot).id !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (typeof (x as Snapshot).created_at !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (typeof (x as Snapshot).homeTeam !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (typeof (x as Snapshot).awayTeam !== "string") return { ok: false, error: VALIDATION_FAILED_KEY };
+  if (!isPlainObject((x as Snapshot).result)) return { ok: false, error: VALIDATION_FAILED_KEY };
   const snap = x as Snapshot;
   const str = JSON.stringify(snap);
   const size = new TextEncoder().encode(str).length;
-  if (size > SNAPSHOT_MAX_BYTES) return { ok: false, error: "Snapshot exceeds 250KB" };
+  if (size > SNAPSHOT_MAX_BYTES) return { ok: false, error: VALIDATION_FAILED_KEY };
   return { ok: true, value: { ...snap, size_bytes: (snap as Snapshot).size_bytes ?? size } };
 }
 
 function validateSnapshotBundle(x: unknown): { ok: true; value: { snapshots: Snapshot[]; rejectedCount: number }; warn?: string } | { ok: false; error: string } {
-  if (!isPlainObject(x)) return { ok: false, error: "Not an object" };
+  if (!isPlainObject(x)) return { ok: false, error: VALIDATION_FAILED_KEY };
   const arr = (x as { snapshots?: unknown }).snapshots;
-  if (!Array.isArray(arr)) return { ok: false, error: "snapshots array missing" };
+  if (!Array.isArray(arr)) return { ok: false, error: VALIDATION_FAILED_KEY };
   let warn: string | undefined;
   if ((x as { app?: string }).app !== "ai-mentor" || (x as { bundle_version?: string }).bundle_version !== "1")
     warn = "Bundle app/version mismatch; importing if snapshots valid.";
@@ -484,7 +486,7 @@ function buildReportHtml(params: {
   const candidates = safeArray(result?.resolver?.candidates);
   const localTime = new Date(timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   const marketList = scopeMarketKeys.slice(0, 12);
-  const moreMarkets = scopeMarketKeys.length > 12 ? " (+" + (scopeMarketKeys.length - 12) + " more)" : "";
+  const moreMarkets = scopeMarketKeys.length > 12 ? " (+" + (scopeMarketKeys.length - 12) + " " + t("report.more") + ")" : "";
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const style = `
     body { font-family: system-ui, Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #111; max-width: 800px; margin: 0 auto; padding: 16px; }
@@ -500,55 +502,55 @@ function buildReportHtml(params: {
     .muted { color: #666; font-size: 11px; }
     .footer { margin-top: 24px; font-size: 10px; color: #888; }
   `;
-  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AI Μέντορας — Match Report</title><style>${style}</style></head><body>`;
-  html += `<h1>AI Μέντορας — Match Report</h1>`;
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(t("report.title"))}</title><style>${style}</style></head><body>`;
+  html += `<h1>${esc(t("report.title"))}</h1>`;
   html += `<p class="muted">${localTime} · ${endpoint}</p>`;
-  html += `<p><strong>Match input:</strong> ${esc(homeTeam || "—")} vs ${esc(awayTeam || "—")}</p>`;
-  html += `<p><strong>Status:</strong> ${esc(result?.status ?? "—")}${httpStatus != null ? " · HTTP " + httpStatus : ""}</p>`;
+  html += `<p><strong>${esc(t("report.match_input"))}:</strong> ${esc(homeTeam || "—")} vs ${esc(awayTeam || "—")}</p>`;
+  html += `<p><strong>${esc(t("label.status"))}:</strong> ${esc(result?.status ?? "—")}${httpStatus != null ? " · HTTP " + httpStatus : ""}</p>`;
 
-  html += `<h2>Resolver</h2>`;
-  html += `<p>status: ${esc(result?.resolver?.status ?? "—")} · match_id: ${esc(String(result?.match_id ?? result?.resolver?.match_id ?? "—"))}</p>`;
-  html += notes.length ? "<ul>" + notes.slice(0, 12).map((n) => "<li>" + esc(String(n ?? "")) + "</li>").join("") + "</ul>" : "<p>—</p>";
-  html += `<p>candidates: ${candidates.length}</p>`;
+  html += `<h2>${esc(t("section.resolver"))}</h2>`;
+  html += `<p>${esc(t("label.status"))}: ${esc(result?.resolver?.status ?? "—")} · ${esc(t("label.match_id"))}: ${esc(String(result?.match_id ?? result?.resolver?.match_id ?? "—"))}</p>`;
+  html += notes.length ? "<ul>" + notes.slice(0, 12).map((n) => "<li>" + esc(labelNoteOrWarning(String(n ?? "")) || String(n ?? "")) + "</li>").join("") + "</ul>" : "<p>—</p>";
+  html += `<p>${esc(t("report.candidates"))}: ${candidates.length}</p>`;
 
-  html += `<h2>Outcome</h2>`;
-  html += `<p>${(outcomeBanner.kind ?? outcomeBanner.message) ? esc((outcomeBanner.kind ?? "") + ": " + (outcomeBanner.message ?? "")) : "(none)"}</p>`;
+  html += `<h2>${esc(t("summary.outcome"))}</h2>`;
+  html += `<p>${(outcomeBanner.kind ?? outcomeBanner.message) ? esc((outcomeBanner.kind ?? "") + ": " + (outcomeBanner.message ?? "")) : esc(t("report.none"))}</p>`;
 
-  html += `<h2>Decisions summary</h2>`;
-  html += `<p>total: ${scopeDecisions.length} · PLAY ${scopeKindCounts.PLAY} | NO_BET ${scopeKindCounts.NO_BET} | NO_PREDICTION ${scopeKindCounts.NO_PREDICTION} | UNKNOWN ${scopeKindCounts.UNKNOWN}</p>`;
-  html += `<p>markets: ${marketList.join(", ") || "—"}${moreMarkets}</p>`;
+  html += `<h2>${esc(t("report.decisions_summary"))}</h2>`;
+  html += `<p>${esc(t("report.total"))}: ${scopeDecisions.length} · ${esc(labelDecisionKind("PLAY"))} ${scopeKindCounts.PLAY} | ${esc(labelDecisionKind("NO_BET"))} ${scopeKindCounts.NO_BET} | ${esc(labelDecisionKind("NO_PREDICTION"))} ${scopeKindCounts.NO_PREDICTION}</p>`;
+  html += `<p>${esc(t("report.markets"))}: ${marketList.join(", ") || "—"}${moreMarkets}</p>`;
 
-  html += `<h2>Decisions table</h2>`;
-  html += `<table><thead><tr><th>Market</th><th>Decision</th><th>Kind</th><th>Conf%</th><th>Flags</th></tr></thead><tbody>`;
+  html += `<h2>${esc(t("report.decisions_table"))}</h2>`;
+  html += `<table><thead><tr><th>${esc(t("filter.market"))}</th><th>${esc(t("summary.decision"))}</th><th>${esc(t("summary.kind"))}</th><th>Conf%</th><th>${esc(t("label.flags"))}</th></tr></thead><tbody>`;
   for (const d of scopeDecisions) {
-    const kind = getDecisionKind(d.decision);
+    const kindLabel = labelDecisionKind(d.decision ?? "");
     const conf = toPercentInt(d.confidence);
     const flags = flattenFlags(d).join(", ");
-    html += `<tr><td>${esc(d.market ?? "")}</td><td>${esc(d.decision ?? "")}</td><td>${esc(kind)}</td><td>${esc(conf)}</td><td>${esc(flags)}</td></tr>`;
+    html += `<tr><td>${esc(d.market ?? "")}</td><td>${esc(d.decision ?? "")}</td><td>${esc(kindLabel)}</td><td>${esc(conf)}</td><td>${esc(flags)}</td></tr>`;
   }
   html += `</tbody></table>`;
 
   if (selectedMarket != null || selectedDecision != null) {
-    html += `<h2>Selected decision</h2>`;
-    html += `<p>market: ${esc(selectedMarket ?? "—")} · kind: ${selectedDecision ? esc(getDecisionKind(selectedDecision.decision)) : "—"}</p>`;
-    html += `<p>decision: ${esc(selectedDecision?.decision ?? "—")} · confidence: ${selectedDecision ? esc(toPercentInt(selectedDecision.confidence)) : "—"}</p>`;
-    html += `<p>flags: ${selectedDecision ? esc(flattenFlags(selectedDecision).join(", ")) : "—"}</p>`;
+    html += `<h2>${esc(t("report.selected_decision"))}</h2>`;
+    html += `<p>${esc(t("summary.market"))}: ${esc(selectedMarket ?? "—")} · ${esc(t("summary.kind"))}: ${selectedDecision ? esc(labelDecisionKind(selectedDecision.decision ?? "")) : "—"}</p>`;
+    html += `<p>${esc(t("summary.decision"))}: ${esc(selectedDecision?.decision ?? "—")} · ${esc(t("label.confidence"))}: ${selectedDecision ? esc(toPercentInt(selectedDecision.confidence)) : "—"}</p>`;
+    html += `<p>${esc(t("label.flags"))}: ${selectedDecision ? esc(flattenFlags(selectedDecision).join(", ")) : "—"}</p>`;
     const reasons = safeArray<string>(selectedDecision?.reasons).slice(0, 10);
-    html += `<p>reasons: ${reasons.length ? esc(reasons.join("; ")) : "—"}</p>`;
+    html += `<p>${esc(t("label.reasons"))}: ${reasons.length ? esc(reasons.join("; ")) : "—"}</p>`;
   }
 
-  html += `<h2>Evidence / Analysis</h2>`;
-  html += `<p>analyzer status: ${esc(result?.analyzer?.status ?? "—")} · logic version: ${esc(result?.analyzer?.analysis_run?.logic_version ?? "—")}</p>`;
-  html += `<p>evidence_pack: ${result?.evidence_pack ? "yes (domains: " + safeArray(result.evidence_pack.domains).length + ")" : "no"}</p>`;
+  html += `<h2>${esc(t("report.evidence_analysis"))}</h2>`;
+  html += `<p>${esc(t("summary.analyzer_status"))}: ${esc(result?.analyzer?.status ?? "—")} · ${esc(t("label.logic"))}: ${esc(result?.analyzer?.analysis_run?.logic_version ?? "—")}</p>`;
+  html += `<p>evidence_pack: ${result?.evidence_pack ? t("summary.yes") + " (domains: " + safeArray(result.evidence_pack.domains).length + ")" : t("summary.no")}</p>`;
 
   if (includeAppendices) {
-    html += `<h2>Appendix A — Raw result JSON</h2><pre>${safeStringify(result).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+    html += `<h2>${esc(t("report.appendix_a"))}</h2><pre>${safeStringify(result).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
     if (selectedDecision != null) {
-      html += `<h2>Appendix B — Selected decision JSON</h2><pre>${safeStringify(selectedDecision).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+      html += `<h2>${esc(t("report.appendix_b"))}</h2><pre>${safeStringify(selectedDecision).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
     }
   }
 
-  html += `<p class="footer">Deterministic export — no inferred predictions beyond backend fields.</p>`;
+  html += `<p class="footer">${esc(t("report.deterministic_footer"))}</p>`;
   html += `</body></html>`;
   return html;
 }
@@ -1026,8 +1028,9 @@ function App() {
       if (isPlainObject(v) && Array.isArray((v as { snapshots?: unknown }).snapshots)) {
         const bundle = validateSnapshotBundle(v);
         if (!bundle.ok) {
-          setImportStatus("error: " + bundle.error);
-          showToast("error", bundle.error);
+          const errMsg = t(bundle.error);
+          setImportStatus("error: " + errMsg);
+          showToast("error", errMsg);
           return;
         }
         const { snapshots: imported, rejectedCount } = bundle.value;
@@ -1111,12 +1114,12 @@ function App() {
       const text = await readFileAsText(file);
       const parsed = safeParseJson(text);
       if (!parsed.ok) {
-        setImportStatus("error: " + parsed.error);
+        setImportStatus("error: " + t("error.invalid_json"));
         return;
       }
       const bundle = validateSnapshotBundle(parsed.value);
       if (!bundle.ok) {
-        setImportStatus("error: " + bundle.error);
+        setImportStatus("error: " + t(bundle.error));
         return;
       }
       const { snapshots: imported, rejectedCount } = bundle.value;
@@ -1416,7 +1419,7 @@ function App() {
   const copyDebugInfo = () => {
     if (!lastErrorDebug) return;
     const block = [
-      `AI Mentor debug`,
+      t("debug.title"),
       `Timestamp: ${lastErrorDebug.timestamp}`,
       `Endpoint: ${lastErrorDebug.endpoint}`,
       `HTTP status: ${lastErrorDebug.httpStatus ?? "N/A"}`,
@@ -1635,7 +1638,7 @@ function App() {
         )}
         {view === "RESULT" && result && (
           <div className="ai-container">
-            <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label="Analysis result">
+            <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label={t("status.region_result")}>
               {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
               <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
                 <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} onExport={handleExportResultSummary} />
@@ -1853,7 +1856,7 @@ function App() {
 
         {/* BLOCK 8.8: RESULT — ResultView; empty state banner above when applicable */}
       {analyzeState === "RESULT" && result && (
-        <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label="Analysis result">
+        <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label={t("status.region_result")}>
           {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
           {/* BLOCK 8.7: Canonical Result View (view-model, no raw JSON dump) */}
           <div className={emptyKind != null ? "ai-result-view-separator" : ""}>

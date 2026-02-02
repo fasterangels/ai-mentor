@@ -66,7 +66,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function Sidebar({ activeKey = "home", onSelect }: SidebarProps) {
   return (
-    <aside className="ai-shell-sidebar" role="navigation" aria-label="Main menu">
+    <aside className="ai-shell-sidebar" role="navigation" aria-label={t("aria.main_menu")}>
       <div className="ai-shell-sidebar__brand">
         <span className="ai-shell-sidebar__logo">AI Μέντορας</span>
       </div>
