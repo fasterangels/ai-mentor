@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { ResultVM } from "./types";
 import MatchHeader from "./MatchHeader";
 import ResolverStatusCard from "./ResolverStatusCard";
@@ -29,9 +30,9 @@ export default function ResultView({ vm, onExport }: ResultViewProps) {
               type="button"
               className="ai-btn ai-btn--ghost"
               onClick={() => onExport(vm)}
-              aria-label="Export result (PDF/summary)"
+              aria-label={t("btn.export")}
             >
-              Export
+              {t("btn.export")}
             </button>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { EvidenceVM } from "./types";
 
 export interface EvidenceListProps {
@@ -9,10 +10,10 @@ export default function EvidenceList({ items }: EvidenceListProps) {
     <div className="ai-section">
       <div className="ai-card">
         <div className="ai-cardHeader">
-          <div className="ai-cardTitle">Evidence Pack</div>
+          <div className="ai-cardTitle">{t("section.evidence_pack")}</div>
         </div>
         {items.length === 0 ? (
-          <p className="ai-muted" style={{ margin: 0 }}>No evidence provided</p>
+          <p className="ai-muted" style={{ margin: 0 }}>{t("empty.no_evidence")}</p>
         ) : (
           <ul style={{ margin: 0, paddingLeft: 20, listStyle: "disc" }}>
             {items.map((item, i) => (

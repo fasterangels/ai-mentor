@@ -1,7 +1,16 @@
 /**
  * BLOCK 8.8: Error state — deterministic messages by error kind.
  */
+import { t } from "../../i18n";
 import type { ErrorKind } from "./stateMachine";
+
+const ERROR_KEYS: Record<ErrorKind, string> = {
+  NETWORK_ERROR: "error.network",
+  HTTP_ERROR: "error.http",
+  RESOLVER_NOT_FOUND: "error.resolver_not_found",
+  RESOLVER_AMBIGUOUS: "error.resolver_ambiguous",
+  ANALYZER_NO_PREDICTION: "error.analyzer_no_prediction",
+};
 
 export interface ErrorStateProps {
   errorKind: ErrorKind;
@@ -11,14 +20,6 @@ export interface ErrorStateProps {
   hasDebug?: boolean;
 }
 
-const MESSAGES: Record<ErrorKind, string> = {
-  NETWORK_ERROR: "Backend unreachable. Check that the service is running.",
-  HTTP_ERROR: "Request failed. See status and detail below.",
-  RESOLVER_NOT_FOUND: "Match not found in kickoff window.",
-  RESOLVER_AMBIGUOUS: "Match could not be resolved uniquely.",
-  ANALYZER_NO_PREDICTION: "No prediction available for this match.",
-};
-
 export default function ErrorState({
   errorKind,
   httpStatus,
@@ -26,7 +27,7 @@ export default function ErrorState({
   onCopyDebug,
   hasDebug,
 }: ErrorStateProps) {
-  const message = MESSAGES[errorKind];
+  const message = t(ERROR_KEYS[errorKind]);
 
   return (
     <div className="ai-section">
@@ -39,7 +40,7 @@ export default function ErrorState({
           </svg>
         </div>
         <div style={{ textAlign: "center" }}>
-          <strong style={{ display: "block", marginBottom: 6 }}>Error</strong>
+          <strong style={{ display: "block", marginBottom: 6 }}>{t("error.title")}</strong>
           <p className="ai-empty-state__text" style={{ margin: "0 0 8px" }}>{message}</p>
           {errorKind === "HTTP_ERROR" && httpStatus != null && (
             <span className="ai-muted" style={{ display: "block", fontSize: "0.8125rem" }}>
@@ -53,13 +54,13 @@ export default function ErrorState({
               className="ai-btn ai-btn--accent"
               style={{ marginTop: 12 }}
               onClick={onCopyDebug}
-              aria-label="Copy debug info"
+              aria-label={t("btn.copy_debug")}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: "middle" }}>
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
-              Copy debug info
+              {t("btn.copy_debug")}
             </button>
           )}
         </div>

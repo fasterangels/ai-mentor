@@ -4,6 +4,7 @@
  * localStorage only; no backend calls.
  */
 import { useCallback, useEffect, useState } from "react";
+import { t } from "../../i18n";
 
 export const SETTINGS_STORAGE_KEYS = {
   restoreWindowDefaults: "ai-mentor.restoreWindowDefaults",
@@ -78,21 +79,21 @@ export default function AppSettingsPanel({
   return (
     <div className="ai-card" style={{ marginTop: 16 }}>
       <div className="ai-cardHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="ai-cardTitle">Settings</div>
+        <div className="ai-cardTitle">{t("settings.title")}</div>
         <button
           type="button"
           className="ai-btn ai-btn--ghost"
           onClick={onClose}
-          aria-label="Close settings"
+          aria-label={t("settings.close")}
         >
-          Close
+          {t("btn.close")}
         </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
         {/* Analyzer version (read-only) */}
         <div>
-          <span className="ai-status-label">Analyzer version (from last result):</span>{" "}
+          <span className="ai-status-label">{t("settings.analyzer_version")}:</span>{" "}
           <span className="ai-muted">
             {analyzerVersionFromResult != null && analyzerVersionFromResult !== ""
               ? analyzerVersionFromResult
@@ -110,18 +111,18 @@ export default function AppSettingsPanel({
             aria-describedby="ai-settings-restore-desc"
           />
           <label htmlFor="ai-settings-restore-window" id="ai-settings-restore-desc">
-            Restore window size on launch
+            {t("settings.restore_window")}
           </label>
         </div>
 
         {/* Export file name template (preview only) */}
         <div>
-          <span className="ai-status-label">Export file name template (preview):</span>
+          <span className="ai-status-label">{t("settings.export_template")}</span>
           <p className="ai-muted" style={{ margin: "4px 0 0 0", fontSize: 12 }}>
-            Template: <code style={{ fontSize: 11 }}>{exportTemplate}.pdf</code>
+            {t("settings.template")}: <code style={{ fontSize: 11 }}>{exportTemplate}.pdf</code>
           </p>
           <p className="ai-muted" style={{ margin: "4px 0 0 0", fontSize: 12 }}>
-            Preview: <code style={{ fontSize: 11 }}>{preview}</code>
+            {t("settings.preview")}: <code style={{ fontSize: 11 }}>{preview}</code>
           </p>
         </div>
       </div>

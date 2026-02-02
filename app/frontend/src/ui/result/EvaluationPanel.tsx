@@ -16,7 +16,7 @@ export default function EvaluationPanel({ items }: EvaluationPanelProps) {
     <div className="ai-section">
       <div className="ai-card" style={{ flex: "1 1 100%", minWidth: 0 }}>
         <div className="ai-cardHeader">
-          <div className="ai-cardTitle">Evaluation</div>
+          <div className="ai-cardTitle">{require("../../i18n").t("section.evaluation")}</div>
         </div>
       <ul style={{ margin: "4px 0 0 0", paddingLeft: 20, listStyle: "disc", fontSize: 14 }}>
         {items.map((kpi, i) => (

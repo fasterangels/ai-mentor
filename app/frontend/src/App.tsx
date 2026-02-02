@@ -16,6 +16,7 @@ import AppShell from "./ui/shell/AppShell";
 import HomeScreen from "./ui/home/HomeScreen";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
+import { t, labelResolverStatus, labelDecisionKind } from "./i18n";
 
 const BUILD_ID = (import.meta.env?.VITE_BUILD_ID as string) ?? "UNKNOWN_BUILD";
 
@@ -36,13 +37,13 @@ function viewToSidebarKey(view: View): string {
 
 function viewToPageTitle(view: View): string {
   switch (view) {
-    case "HOME": return "Αρχική";
-    case "NEW_PREDICTION": return "Προβλέψεις";
-    case "RESULT": return "Αποτέλεσμα Πρόβλεψης";
-    case "SUMMARY": return "Σύνοψη Απόδοσης";
-    case "HISTORY": return "Ιστορικό Προβλέψεων";
-    case "SETTINGS": return "Ρυθμίσεις";
-    default: return "Αρχική";
+    case "HOME": return t("page.home");
+    case "NEW_PREDICTION": return t("page.new_prediction");
+    case "RESULT": return t("page.result");
+    case "SUMMARY": return t("page.summary");
+    case "HISTORY": return t("page.history");
+    case "SETTINGS": return t("page.settings");
+    default: return t("page.home");
   }
 }
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
@@ -145,18 +146,18 @@ function getOutcomeBanner(
   const topStatus = (result.status ?? "").toUpperCase();
   const resolverStatus = (result.resolver?.status ?? "").toUpperCase();
   if (resolverStatus === "AMBIGUOUS" || topStatus === "AMBIGUOUS")
-    return { kind: "AMBIGUOUS", message: "AMBIGUOUS: ο αγώνας δεν επιλύθηκε μονοσήμαντα." };
+    return { kind: "AMBIGUOUS", message: labelResolverStatus("AMBIGUOUS") + ": " + t("error.resolver_ambiguous") };
   if (resolverStatus === "NOT_FOUND" || topStatus === "NOT_FOUND")
-    return { kind: "NOT_FOUND", message: "NOT_FOUND: δεν βρέθηκε αγώνας στο παράθυρο kickoff." };
-  if (topStatus === "NO_PREDICTION") return { kind: "NO_PREDICTION", message: "NO_PREDICTION: δεν υπάρχουν αρκετά αξιόπιστα δεδομένα/σήματα." };
+    return { kind: "NOT_FOUND", message: labelResolverStatus("NOT_FOUND") + ": " + t("error.resolver_not_found") };
+  if (topStatus === "NO_PREDICTION") return { kind: "NO_PREDICTION", message: labelDecisionKind("NO_PREDICTION") + ": " + t("error.analyzer_no_prediction") };
   const flags = safeArray<string>(result.flags).concat(
     safeArray<string>(result.analyzer?.analysis_run?.flags)
   );
   if (flags.some((f) => /NO_PREDICTION|NO_BET|NO_DECISION/i.test(String(f))))
-    return { kind: "NO_PREDICTION", message: "NO_PREDICTION: δεν υπάρχουν αρκετά αξιόπιστα δεδομένα/σήματα." };
+    return { kind: "NO_PREDICTION", message: labelDecisionKind("NO_PREDICTION") + ": " + t("error.analyzer_no_prediction") };
   const decisions = safeArray(result.analyzer?.decisions);
   if (decisions.some((d) => /NO_PREDICTION|NO_BET|NO_DECISION/i.test(String(d.decision ?? ""))))
-    return { kind: "NO_PREDICTION", message: "NO_PREDICTION: δεν υπάρχουν αρκετά αξιόπιστα δεδομένα/σήματα." };
+    return { kind: "NO_PREDICTION", message: labelDecisionKind("NO_PREDICTION") + ": " + t("error.analyzer_no_prediction") };
   return { kind: null, message: null };
 }
 
@@ -840,7 +841,7 @@ function App() {
     const str = JSON.stringify(snapshot);
     snapshot.size_bytes = new TextEncoder().encode(str).length;
     if (snapshot.size_bytes > SNAPSHOT_MAX_BYTES) {
-      setSnapshotError("Snapshot too large; use Download JSON instead.");
+      setSnapshotError(t("snapshot_too_large"));
       setTimeout(() => setSnapshotError(null), 4000);
       return;
     }
@@ -873,7 +874,7 @@ function App() {
   };
 
   const deleteAllSnapshots = () => {
-    if (!window.confirm("Delete all snapshots?")) return;
+    if (!window.confirm(t("delete_all_confirm"))) return;
     saveSnapshotsList([]);
     setSnapshots([]);
   };
@@ -955,7 +956,7 @@ function App() {
     });
     const w = window.open("", "_blank", "noopener,noreferrer");
     if (!w) {
-      setReportError("Popup blocked. Allow popups to print report.");
+      setReportError(t("popup_blocked"));
       return;
     }
     w.document.open();
@@ -967,7 +968,7 @@ function App() {
 
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      if (file.size > FILE_SIZE_WARN_BYTES && !window.confirm("File is over 2MB. Continue?")) {
+      if (file.size > FILE_SIZE_WARN_BYTES && !window.confirm(t("confirm.file_too_large"))) {
         reject(new Error("Aborted by user"));
         return;
       }
@@ -994,8 +995,9 @@ function App() {
       const text = await readFileAsText(file);
       const parsed = safeParseJson(text);
       if (!parsed.ok) {
-        setImportStatus("error: " + parsed.error);
-        showToast("error", parsed.error);
+        const errMsg = t("error.invalid_json");
+        setImportStatus("error: " + errMsg);
+        showToast("error", errMsg);
         return;
       }
       const v = parsed.value;
@@ -1023,25 +1025,28 @@ function App() {
         }
         saveSnapshotsList(list);
         setSnapshots(list);
-        const statusMsg = rejectedCount > 0 ? `Imported ${list.length} snapshots (${rejectedCount} rejected).` : `Imported ${list.length} snapshots.`;
-        setImportStatus(bundle.warn ? statusMsg + " " + (bundle.warn ?? "") : statusMsg);
-        showToast(bundle.warn ? "warn" : "success", bundle.warn ? `${statusMsg} ${bundle.warn}` : statusMsg);
+        const statusMsg = rejectedCount > 0
+          ? t("import.imported_prefix") + " " + list.length + " " + t("import.snapshots") + " (" + rejectedCount + " " + t("import.rejected") + ")."
+          : t("import.imported_prefix") + " " + list.length + " " + t("import.snapshots") + ".";
+        setImportStatus(bundle.warn ? statusMsg + " " + t("import.bundle_mismatch") : statusMsg);
+        showToast(bundle.warn ? "warn" : "success", bundle.warn ? statusMsg + " " + t("import.bundle_mismatch") : statusMsg);
         return;
       }
 
       if (isPlainObject(v) && (v as { decision?: unknown }).decision !== undefined) {
         const d = v as { homeTeam?: string; awayTeam?: string; selectedMarket?: string; decision?: unknown };
         if (!isPlainObject(d.decision)) {
-          setImportStatus("error: decision must be object");
-          showToast("error", "decision must be object");
+          const errMsg = t("error.decision_object");
+          setImportStatus("error: " + errMsg);
+          showToast("error", errMsg);
           return;
         }
         setSelectedMarket(typeof d.selectedMarket === "string" ? d.selectedMarket : null);
         setSelectedDecision(d.decision as Decision);
         if (typeof d.homeTeam === "string" && d.homeTeam.trim()) setHome(d.homeTeam.trim());
         if (typeof d.awayTeam === "string" && d.awayTeam.trim()) setAway(d.awayTeam.trim());
-        setImportStatus("Loaded selected decision.");
-        showToast("success", "Loaded selected decision.");
+        setImportStatus(t("import.loaded_decision"));
+        showToast("success", t("import.loaded_decision"));
         return;
       }
 
@@ -1051,18 +1056,19 @@ function App() {
         setHttpStatus(null);
         setErrorMessage(null);
         setReportError(null);
-        setImportStatus("Loaded analysis result.");
-        showToast("success", "Loaded analysis result.");
+        setImportStatus(t("import.loaded_result"));
+        showToast("success", t("import.loaded_result"));
         return;
       }
 
-      setImportStatus("error: Unrecognized JSON format.");
-      showToast("error", "Unrecognized JSON format.");
+      const errMsg = t("error.unrecognized_format");
+      setImportStatus("error: " + errMsg);
+      showToast("error", errMsg);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Import failed";
+      const raw = err instanceof Error ? err.message : t("error.import_failed");
+      const msg = raw === "Aborted by user" ? t("error.import_cancelled") : raw;
       setImportStatus("error: " + msg);
-      if (msg === "Aborted by user") showToast("error", "Import cancelled.");
-      else showToast("error", msg);
+      showToast("error", msg);
     }
   };
 
@@ -1108,10 +1114,12 @@ function App() {
       }
       saveSnapshotsList(list);
       setSnapshots(list);
-      setImportStatus(rejectedCount > 0 ? `Imported ${list.length} snapshots (${rejectedCount} rejected).` : `Imported ${list.length} snapshots.`);
-      if (bundle.warn) setImportStatus((prev) => (prev ? prev + " " + bundle.warn : bundle.warn ?? null));
+      const statusMsg = rejectedCount > 0
+        ? t("import.imported_prefix") + " " + list.length + " " + t("import.snapshots") + " (" + rejectedCount + " " + t("import.rejected") + ")."
+        : t("import.imported_prefix") + " " + list.length + " " + t("import.snapshots") + ".";
+      setImportStatus(bundle.warn ? statusMsg + " " + t("import.bundle_mismatch") : statusMsg);
     } catch (err) {
-      setImportStatus("error: " + (err instanceof Error ? err.message : "Import failed"));
+      setImportStatus("error: " + (err instanceof Error ? err.message : t("error.import_failed")));
     }
   };
 
@@ -1188,7 +1196,7 @@ function App() {
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
       if (!/\.json$/i.test(file.name)) {
-        showToastRef.current("warn", "Only .json files supported.");
+        showToastRef.current("warn", t("only_json_supported"));
         return;
       }
       handleImportedFileRef.current(file, "drop");
@@ -1335,7 +1343,7 @@ function App() {
       setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
       setErrorMessage(
         isNetwork
-          ? "Backend unreachable. Check that the service is running."
+          ? t("error.network")
           : msg
       );
       setLastErrorDebug({
@@ -1564,15 +1572,15 @@ function App() {
       {isDragOver && (
         <div className="ai-dropOverlay" role="presentation">
           <div className="ai-dropOverlay__box">
-            <div className="ai-dropOverlay__title">Drop JSON to import</div>
-            <div className="ai-dropOverlay__sub">Supported: result JSON, decision JSON, snapshots bundle</div>
+            <div className="ai-dropOverlay__title">{t("drop.title")}</div>
+            <div className="ai-dropOverlay__sub">{t("drop.sub")}</div>
           </div>
         </div>
       )}
       {toast && (
         <div className={`ai-toast ai-toast--${toast.kind}`} role="status" aria-live="polite">
           <div className="ai-toast__msg">{toast.message}</div>
-          <button type="button" className="ai-btn ai-btn--ghost ai-toast__close" onClick={() => { setToast(null); if (toastTimeoutRef.current) { clearTimeout(toastTimeoutRef.current); toastTimeoutRef.current = null; } }} aria-label="Dismiss">×</button>
+          <button type="button" className="ai-btn ai-btn--ghost ai-toast__close" onClick={() => { setToast(null); if (toastTimeoutRef.current) { clearTimeout(toastTimeoutRef.current); toastTimeoutRef.current = null; } }} aria-label={t("toast.dismiss")}>×</button>
         </div>
       )}
       <AppShell
@@ -1585,15 +1593,15 @@ function App() {
           if (key === "settings") setView("SETTINGS");
         }}
         pageTitle={viewToPageTitle(view)}
-        statusLabel={backendReady ? "Ready" : "Starting…"}
+        statusLabel={backendReady ? t("topbar.status_ready") : t("topbar.status_starting")}
       >
         {view === "HOME" && <HomeScreen onNavigate={setView} />}
         {view === "RESULT" && !result && (
           <div className="ai-container">
             <div className="ai-card ai-card--warning" role="status">
-              <p className="ai-muted" style={{ margin: 0 }}>Δεν υπάρχει αποτέλεσμα. Κάνε μια νέα πρόβλεψη.</p>
+              <p className="ai-muted" style={{ margin: 0 }}>{t("empty.no_result_message")}</p>
               <button type="button" className="ai-btn ai-btn--primary" style={{ marginTop: 12 }} onClick={() => setView("NEW_PREDICTION")}>
-                Νέα Πρόβλεψη
+                {t("empty.no_result_btn")}
               </button>
             </div>
           </div>
@@ -1608,19 +1616,19 @@ function App() {
               <div className="ai-section ai-no-print">
                 <div className="ai-card">
                   <details>
-                    <summary className="ai-summary">Show raw JSON (debug)</summary>
+                    <summary className="ai-summary">{t("raw_json_show")}</summary>
                     <pre className="ai-pre ai-mono" style={{ marginTop: 8 }}>{safeStringify(result)}</pre>
                   </details>
                 </div>
               </div>
               <div className="ai-section">
                 <div className="ai-card">
-                  <div className="ai-cardHeader"><div className="ai-cardTitle">Export</div></div>
+                  <div className="ai-cardHeader"><div className="ai-cardTitle">{t("section.export")}</div></div>
                   <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
-                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleCopySummary} aria-label="Copy summary">{copiedKey === "summary" ? "Copied" : "Copy summary"}</button>
-                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadResultJson} aria-label="Download result JSON">Download result JSON</button>
-                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleExportAnalysisPdf} aria-label="Export analysis (PDF)">Export analysis (PDF)</button>
-                    <button type="button" className="ai-btn ai-btn--accent" onClick={handleSaveSnapshot} aria-label="Save snapshot">Save snapshot</button>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleCopySummary} aria-label={t("btn.copy_summary")}>{copiedKey === "summary" ? t("btn.copied") : t("btn.copy_summary")}</button>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadResultJson} aria-label={t("btn.download_result_json")}>{t("btn.download_result_json")}</button>
+                    <button type="button" className="ai-btn ai-btn--ghost" onClick={handleExportAnalysisPdf} aria-label={t("btn.export_analysis_pdf")}>{t("btn.export_analysis_pdf")}</button>
+                    <button type="button" className="ai-btn ai-btn--accent" onClick={handleSaveSnapshot} aria-label={t("btn.save_snapshot")}>{t("btn.save_snapshot")}</button>
                   </div>
                 </div>
               </div>
@@ -1630,23 +1638,23 @@ function App() {
         {view === "SUMMARY" && (
           <div className="ai-container">
             <div className="ai-card">
-              <h2 className="ai-cardTitle" style={{ marginBottom: 8 }}>Σύνοψη Απόδοσης</h2>
-              <p className="ai-muted" style={{ margin: 0 }}>Συνοπτικά KPIs και στατιστικά. (Προσεχώς)</p>
+              <h2 className="ai-cardTitle" style={{ marginBottom: 8 }}>{t("summary.placeholder_title")}</h2>
+              <p className="ai-muted" style={{ margin: 0 }}>{t("summary.placeholder_desc")}</p>
             </div>
           </div>
         )}
         {view === "HISTORY" && (
           <div className="ai-container">
             <div className="ai-card">
-              <div className="ai-cardHeader"><div className="ai-cardTitle">Ιστορικό Προβλέψεων</div></div>
+              <div className="ai-cardHeader"><div className="ai-cardTitle">{t("history.title")}</div></div>
               {snapshotError && (
                 <p className="ai-muted" style={{ margin: "0 0 8px 0", color: "var(--error)" }} role="alert">{snapshotError}</p>
               )}
               <details open>
-                <summary className="ai-summary">Snapshots ({snapshots.length})</summary>
+                <summary className="ai-summary">{t("section.snapshots")} ({snapshots.length})</summary>
                 <div style={{ marginTop: 8 }}>
                   {snapshots.length === 0 ? (
-                    <p className="ai-muted" style={{ margin: "8px 0" }}>No snapshots saved.</p>
+                    <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.snapshots_none")}</p>
                   ) : (
                     <>
                       {snapshots.slice().reverse().map((snap) => (
@@ -1654,17 +1662,17 @@ function App() {
                           <span className="ai-muted" style={{ fontSize: 11 }}>
                             {new Date(snap.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
                             {" · "}{snap.homeTeam} vs {snap.awayTeam}
-                            {" · "}{snap.resolver?.status ?? snap.status ?? "—"}
+                            {" · "}{labelResolverStatus(snap.resolver?.status ?? snap.status ?? "")}
                             {" · "}{(snap.size_bytes / 1024).toFixed(1)} KB
                           </span>
                           <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => { loadSnapshot(snap); setView("NEW_PREDICTION"); }}>Load</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>Download</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>Delete</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => { loadSnapshot(snap); setView("NEW_PREDICTION"); }}>{t("btn.load")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>{t("btn.download")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>{t("btn.delete")}</button>
                           </span>
                         </div>
                       ))}
-                      <button type="button" className="ai-btn ai-btn--ghost" style={{ marginTop: 8 }} onClick={deleteAllSnapshots}>Delete all</button>
+                      <button type="button" className="ai-btn ai-btn--ghost" style={{ marginTop: 8 }} onClick={deleteAllSnapshots}>{t("btn.delete_all")}</button>
                     </>
                   )}
                 </div>
@@ -1682,43 +1690,43 @@ function App() {
         )}
         {view === "NEW_PREDICTION" && (
       <div className="ai-container">
-        <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>AI Μέντορας — Ανάλυση</h1>
+        <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>{t("analysis.title")}</h1>
         {!backendReady && (
           <div className="ai-card ai-card--warning" style={{ marginBottom: 12 }} role="status">
-            <p style={{ margin: 0 }}>Backend starting…</p>
+            <p style={{ margin: 0 }}>{t("analysis.backend_starting")}</p>
           </div>
         )}
-        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>BUILD: {BUILD_ID}</p>
+        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>{t("footer.build")}: {BUILD_ID}</p>
 
         <div className="ai-row ai-row--gap2" style={{ marginBottom: 12 }}>
-          <label htmlFor="ai-mentor-home" className="ai-label">Ομάδα γηπέδου</label>
+          <label htmlFor="ai-mentor-home" className="ai-label">{t("label.home")}</label>
           <input
             id="ai-mentor-home"
             className="ai-input"
             value={home}
             onChange={(e) => setHome(e.target.value)}
-            placeholder="Ομάδα γηπέδου"
+            placeholder={t("analysis.home_team_placeholder")}
             disabled={loading}
-            aria-label="Ομάδα γηπέδου"
+            aria-label={t("label.home")}
           />
           <button
             type="button"
             className="ai-btn ai-btn--ghost"
             onClick={() => { const h = home; setHome(away); setAway(h); }}
             disabled={loading}
-            aria-label="Swap home and away"
+            aria-label={t("btn.swap")}
           >
-            ⇄ Swap
+            {t("btn.swap")}
           </button>
-          <label htmlFor="ai-mentor-away" className="ai-label">Αντίπαλος</label>
+          <label htmlFor="ai-mentor-away" className="ai-label">{t("label.away")}</label>
           <input
             id="ai-mentor-away"
             className="ai-input"
             value={away}
             onChange={(e) => setAway(e.target.value)}
-            placeholder="Αντίπαλος"
+            placeholder={t("analysis.away_placeholder")}
             disabled={loading}
-            aria-label="Αντίπαλος"
+            aria-label={t("label.away")}
           />
         </div>
 
@@ -1728,39 +1736,39 @@ function App() {
             onClick={runAnalyze}
             disabled={loading || !backendReady}
             aria-busy={loading}
-            aria-label={loading ? "Analyzing…" : "Run analysis"}
+            aria-label={loading ? t("btn.analyzing") : t("btn.analyze")}
           >
-            {loading ? "Analyzing…" : "ANALYZE"}
+            {loading ? t("btn.analyzing") : t("btn.analyze")}
           </button>
           {loading && (
             <button
               type="button"
               className="ai-btn ai-btn--ghost"
               onClick={() => abortRef.current?.abort()}
-              aria-label="Cancel analysis"
+              aria-label={t("btn.cancel")}
             >
-              Cancel
+              {t("btn.cancel")}
             </button>
           )}
           <button
             type="button"
             className="ai-btn ai-btn--ghost"
             onClick={clearResults}
-            aria-label="Clear results"
+            aria-label={t("btn.clear_results")}
           >
-            Clear results
+            {t("btn.clear_results")}
           </button>
           <button type="button" className="ai-btn ai-btn--ghost" onClick={resetAll}>
-            Reset all
+            {t("btn.reset_all")}
           </button>
           <button
             type="button"
             className="ai-btn ai-btn--ghost"
             onClick={() => setShowSettings((s) => !s)}
             aria-expanded={showSettings}
-            aria-label="Open settings"
+            aria-label={t("btn.settings")}
           >
-            Settings
+            {t("btn.settings")}
           </button>
         </div>
         {/* BLOCK 3: Settings panel (single view, no routing) */}
@@ -1807,7 +1815,7 @@ function App() {
           <div className="ai-section ai-no-print">
             <div className="ai-card">
               <details>
-                <summary className="ai-summary">Show raw JSON (debug)</summary>
+                <summary className="ai-summary">{t("raw_json_show")}</summary>
                 <pre className="ai-pre ai-mono" style={{ marginTop: 8 }}>{safeStringify(result)}</pre>
               </details>
             </div>
@@ -1817,87 +1825,87 @@ function App() {
           <div className="ai-section">
             <div className="ai-card">
               <div className="ai-cardHeader">
-                <div className="ai-cardTitle">Export</div>
+                <div className="ai-cardTitle">{t("section.export")}</div>
               </div>
               <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
                 <button
                   type="button"
                   className="ai-btn ai-btn--ghost"
                   onClick={handleCopySummary}
-                  aria-label="Copy summary"
+                  aria-label={t("btn.copy_summary")}
                 >
-                  {copiedKey === "summary" ? "Copied" : "Copy summary"}
+                  {copiedKey === "summary" ? t("btn.copied") : t("btn.copy_summary")}
                 </button>
                 <button
                   type="button"
                   className="ai-btn ai-btn--ghost"
                   onClick={handleDownloadResultJson}
-                  aria-label="Download result JSON"
+                  aria-label={t("btn.download_result_json")}
                 >
-                  Download result JSON
+                  {t("btn.download_result_json")}
                 </button>
                 <button
                   type="button"
                   className="ai-btn ai-btn--ghost"
                   onClick={handleExportAnalysisJson}
-                  aria-label="Export analysis (JSON)"
+                  aria-label={t("btn.export_analysis_json")}
                 >
-                  Export analysis (JSON)
+                  {t("btn.export_analysis_json")}
                 </button>
                 <button
                   type="button"
                   className="ai-btn ai-btn--ghost"
                   onClick={handleExportAnalysisPdf}
-                  aria-label="Export analysis (PDF)"
+                  aria-label={t("btn.export_analysis_pdf")}
                 >
-                  Export analysis (PDF)
+                  {t("btn.export_analysis_pdf")}
                 </button>
                 <button
                   type="button"
                   className="ai-btn ai-btn--ghost"
                   onClick={handleDownloadSelectedDecisionJson}
                   disabled={selectedDecision == null}
-                  aria-label="Download selected decision JSON"
+                  aria-label={t("btn.download_decision_json")}
                 >
-                  Download selected decision JSON
+                  {t("btn.download_decision_json")}
                 </button>
                 <button
                   type="button"
                   className="ai-btn ai-btn--accent"
                   onClick={handleSaveSnapshot}
-                  aria-label="Save snapshot"
+                  aria-label={t("btn.save_snapshot")}
                 >
-                  Save snapshot
+                  {t("btn.save_snapshot")}
                 </button>
               </div>
               {exportAnalysisError && (
                 <p className="ai-muted" style={{ margin: "8px 0 0 0", color: "var(--error)" }} role="alert">
-                  Export failed: {exportAnalysisError}
+                  {t("export_failed")}: {exportAnalysisError}
                 </p>
               )}
               {exportPdfError && (
                 <p className="ai-muted" style={{ margin: "8px 0 0 0", color: "var(--error)" }} role="alert">
-                  PDF export failed: {exportPdfError}
+                  {t("pdf_export_failed")}: {exportPdfError}
                 </p>
               )}
 
               {/* CSV (BLOCK 9.2) */}
               <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-                <span className="ai-label">CSV delimiter:</span>
+                <span className="ai-label">{t("label.csv_delimiter")}:</span>
                 <select
                   className="ai-select"
                   value={csvDelimiter}
                   onChange={(e) => setCsvDelimiter(e.target.value as ";" | ",")}
-                  aria-label="CSV delimiter"
+                  aria-label={t("label.csv_delimiter")}
                 >
-                  <option value=";">; (semicolon)</option>
-                  <option value=",">, (comma)</option>
+                  <option value=";">{t("csv_semicolon")}</option>
+                  <option value=",">{t("csv_comma")}</option>
                 </select>
                 <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("filtered")}>
-                  Download CSV (filtered)
+                  {t("btn.download_csv_filtered")}
                 </button>
                 <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("all")}>
-                  Download CSV (all)
+                  {t("btn.download_csv_all")}
                 </button>
                 <button
                   type="button"
@@ -1905,33 +1913,33 @@ function App() {
                   onClick={() => handleDownloadCsv("selectedMarket")}
                   disabled={selectedMarket == null}
                 >
-                  Download CSV (selected market)
+                  {t("btn.download_csv_market")}
                 </button>
               </div>
 
               {/* Print report (BLOCK 9.2) */}
               <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-                <span className="ai-label">Report scope:</span>
+                <span className="ai-label">{t("label.report_scope")}:</span>
                 <select
                   className="ai-select"
                   value={reportScope}
                   onChange={(e) => setReportScope(e.target.value as "FILTERED" | "ALL")}
-                  aria-label="Report scope"
+                  aria-label={t("label.report_scope")}
                 >
-                  <option value="FILTERED">FILTERED</option>
-                  <option value="ALL">ALL</option>
+                  <option value="FILTERED">{t("report.scope_filtered")}</option>
+                  <option value="ALL">{t("report.scope_all")}</option>
                 </select>
                 <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
                   <input
                     type="checkbox"
                     checked={reportIncludeAppendices}
                     onChange={(e) => setReportIncludeAppendices(e.target.checked)}
-                    aria-label="Include appendices (raw JSON)"
+                    aria-label={t("label.include_appendices")}
                   />
-                  <span className="ai-muted" style={{ fontSize: 12 }}>Include appendices (raw JSON)</span>
+                  <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.include_appendices")}</span>
                 </label>
                 <button type="button" className="ai-btn ai-btn--accent" onClick={handlePrintReport}>
-                  Print report (Save as PDF)
+                  {t("btn.print_report")}
                 </button>
               </div>
               {reportError && (
@@ -1942,22 +1950,22 @@ function App() {
 
               {/* Import / Bundle (BLOCK 9.3) */}
               <div className="ai-importBox">
-                <div className="ai-cardTitle" style={{ marginBottom: 6 }}>Import / Bundle</div>
+                <div className="ai-cardTitle" style={{ marginBottom: 6 }}>{t("section.import_bundle")}</div>
                 <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 6 }}>
-                  <span className="ai-label">Import JSON:</span>
+                  <span className="ai-label">{t("label.import_json")}:</span>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".json,application/json"
                     onChange={handleImportFileChange}
                     style={{ display: "none" }}
-                    aria-label="Import JSON file"
+                    aria-label={t("btn.import_file")}
                   />
                   <button type="button" className="ai-btn ai-btn--ghost" onClick={() => fileInputRef.current?.click()}>
-                    Import file
+                    {t("btn.import_file")}
                   </button>
                   <button type="button" className="ai-btn ai-btn--ghost" onClick={clearImportMessage}>
-                    Clear import message
+                    {t("btn.clear_import_msg")}
                   </button>
                 </div>
                 {importStatus && (
@@ -1966,7 +1974,7 @@ function App() {
                     style={{
                       margin: "0 0 8px 0",
                       fontSize: 12,
-                      color: importStatus.startsWith("error:") ? "var(--error)" : importStatus.startsWith("Imported") ? "var(--success)" : undefined,
+                      color: importStatus.startsWith("error:") ? "var(--error)" : importStatus.startsWith("Imported") || importStatus.startsWith(t("import.imported_prefix")) ? "var(--success)" : undefined,
                     }}
                     role="alert"
                   >
@@ -1975,7 +1983,7 @@ function App() {
                 )}
                 <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
                   <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadSnapshotsBundle}>
-                    Download snapshots bundle
+                    {t("btn.download_bundle")}
                   </button>
                   <input
                     ref={bundleFileInputRef}
@@ -1983,29 +1991,29 @@ function App() {
                     accept=".json,application/json"
                     onChange={handleBundleFileChange}
                     style={{ display: "none" }}
-                    aria-label="Import snapshots bundle"
+                    aria-label={t("btn.import_bundle")}
                   />
                   <button type="button" className="ai-btn ai-btn--ghost" onClick={() => bundleFileInputRef.current?.click()}>
-                    Import snapshots bundle
+                    {t("btn.import_bundle")}
                   </button>
-                  <span className="ai-label">Bundle import:</span>
+                  <span className="ai-label">{t("label.bundle_import")}:</span>
                   <select
                     className="ai-select"
                     value={bundleImportMode}
                     onChange={(e) => setBundleImportMode(e.target.value as "merge" | "replace")}
-                    aria-label="Bundle import mode"
+                    aria-label={t("label.bundle_import")}
                   >
-                    <option value="merge">Merge (keep newest)</option>
-                    <option value="replace">Replace (overwrite all)</option>
+                    <option value="merge">{t("import.merge")}</option>
+                    <option value="replace">{t("import.replace")}</option>
                   </select>
                   <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
                     <input
                       type="checkbox"
                       checked={bundleDedupe}
                       onChange={(e) => setBundleDedupe(e.target.checked)}
-                      aria-label="Deduplicate by id"
+                      aria-label={t("label.dedupe")}
                     />
-                    <span className="ai-muted" style={{ fontSize: 12 }}>Deduplicate by id</span>
+                    <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.dedupe")}</span>
                   </label>
                 </div>
               </div>
@@ -2016,10 +2024,10 @@ function App() {
                 </p>
               )}
               <details>
-                <summary className="ai-summary">Snapshots ({snapshots.length})</summary>
+                <summary className="ai-summary">{t("section.snapshots")} ({snapshots.length})</summary>
                 <div style={{ marginTop: 8 }}>
                   {snapshots.length === 0 ? (
-                    <p className="ai-muted" style={{ margin: "8px 0" }}>No snapshots saved.</p>
+                    <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.snapshots_none")}</p>
                   ) : (
                     <>
                       {snapshots.slice().reverse().map((snap) => (
@@ -2029,14 +2037,14 @@ function App() {
                             {" · "}
                             {snap.homeTeam} vs {snap.awayTeam}
                             {" · "}
-                            {snap.resolver?.status ?? snap.status ?? "—"}
+                            {labelResolverStatus(snap.resolver?.status ?? snap.status ?? "")}
                             {" · "}
                             {(snap.size_bytes / 1024).toFixed(1)} KB
                           </span>
                           <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => loadSnapshot(snap)}>Load</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>Download</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>Delete</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => loadSnapshot(snap)}>{t("btn.load")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>{t("btn.download")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>{t("btn.delete")}</button>
                           </span>
                         </div>
                       ))}
@@ -2046,7 +2054,7 @@ function App() {
                         style={{ marginTop: 8 }}
                         onClick={deleteAllSnapshots}
                       >
-                        Delete all
+                        {t("btn.delete_all")}
                       </button>
                     </>
                   )}
@@ -2063,75 +2071,75 @@ function App() {
               ref={decisionsHeadingRef}
               tabIndex={0}
               role="region"
-              aria-label="Αποφάσεις"
+              aria-label={t("section.decisions")}
             >
-              <div className="ai-cardTitle">Αποφάσεις</div>
+              <div className="ai-cardTitle">{t("section.decisions")}</div>
             </div>
 
             {decisions.length === 0 ? (
-              <p className="ai-muted" style={{ margin: "8px 0" }}>No decisions returned.</p>
+              <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.no_decisions")}</p>
             ) : (
               <>
                 {/* Controls */}
                 <div style={{ marginBottom: 12 }}>
-                  <div className="ai-cardTitle" style={{ marginBottom: 6 }}>Decisions Controls</div>
+                  <div className="ai-cardTitle" style={{ marginBottom: 6 }}>{t("section.decisions_controls")}</div>
                   <div className="ai-row ai-row--gap2">
                     <label className="ai-row" style={{ gap: 4 }}>
-                      <span className="ai-label">Market</span>
+                      <span className="ai-label">{t("filter.market")}</span>
                       <select
                         className="ai-select"
                         value={marketFilter}
                         onChange={(e) => setMarketFilter(e.target.value)}
                       >
-                        <option value="ALL">ALL</option>
+                        <option value="ALL">{t("filter.all")}</option>
                         {allMarkets.map((m) => (
                           <option key={m} value={m}>{m}</option>
                         ))}
                       </select>
                     </label>
                     <label className="ai-row" style={{ gap: 4 }}>
-                      <span className="ai-label">Kind</span>
+                      <span className="ai-label">{t("filter.kind")}</span>
                       <select
                         className="ai-select"
                         value={kindFilter}
                         onChange={(e) => setKindFilter(e.target.value)}
                       >
-                        <option value="ALL">ALL</option>
-                        <option value="PLAY">PLAY</option>
-                        <option value="NO_BET">NO_BET</option>
-                        <option value="NO_PREDICTION">NO_PREDICTION</option>
-                        <option value="UNKNOWN">UNKNOWN</option>
+                        <option value="ALL">{t("filter.all")}</option>
+                        <option value="PLAY">{labelDecisionKind("PLAY")}</option>
+                        <option value="NO_BET">{labelDecisionKind("NO_BET")}</option>
+                        <option value="NO_PREDICTION">{labelDecisionKind("NO_PREDICTION")}</option>
+                        <option value="UNKNOWN">{labelDecisionKind("UNKNOWN")}</option>
                       </select>
                     </label>
                     <label className="ai-row" style={{ gap: 4 }}>
-                      <span className="ai-label">Flag</span>
+                      <span className="ai-label">{t("filter.flag")}</span>
                       <select
                         className="ai-select"
                         value={flagFilter}
                         onChange={(e) => setFlagFilter(e.target.value)}
                       >
-                        <option value="ALL">ALL</option>
+                        <option value="ALL">{t("filter.all")}</option>
                         {allFlags.map((f) => (
                           <option key={f} value={f}>{f}</option>
                         ))}
                       </select>
                     </label>
                     <label className="ai-row" style={{ gap: 4 }}>
-                      <span className="ai-label">Sort</span>
+                      <span className="ai-label">{t("filter.sort")}</span>
                       <select
                         className="ai-select"
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                       >
-                        <option value="confidence_desc">Confidence ↓</option>
-                        <option value="market_az">Market A–Z</option>
-                        <option value="decision_az">Decision A–Z</option>
+                        <option value="confidence_desc">{t("sort.confidence_desc")}</option>
+                        <option value="market_az">{t("sort.market_az")}</option>
+                        <option value="decision_az">{t("sort.decision_az")}</option>
                       </select>
                     </label>
                     <input
                       type="text"
                       className="ai-input"
-                      placeholder="Search…"
+                      placeholder={t("filter.search")}
                       value={searchText}
                       onChange={(e) => setSearchText(e.target.value)}
                     />
@@ -2140,8 +2148,8 @@ function App() {
 
                 {/* Summary */}
                 <p className="ai-muted" style={{ margin: "0 0 12px 0" }}>
-                  Total decisions: {filteredDecisions.length} | Markets: {filteredMarketKeys.length} | PLAY: {kindCounts.PLAY} | NO_BET: {kindCounts.NO_BET} | NO_PREDICTION: {kindCounts.NO_PREDICTION}
-                  {kindCounts.UNKNOWN > 0 ? ` | UNKNOWN: ${kindCounts.UNKNOWN}` : ""}
+                  {t("total_decisions")}: {filteredDecisions.length} | {t("markets")}: {filteredMarketKeys.length} | {labelDecisionKind("PLAY")}: {kindCounts.PLAY} | {labelDecisionKind("NO_BET")}: {kindCounts.NO_BET} | {labelDecisionKind("NO_PREDICTION")}: {kindCounts.NO_PREDICTION}
+                  {kindCounts.UNKNOWN > 0 ? ` | ${labelDecisionKind("UNKNOWN")}: ${kindCounts.UNKNOWN}` : ""}
                 </p>
 
                 {/* Quick filters */}
@@ -2151,21 +2159,21 @@ function App() {
                     className="ai-chip ai-quickFilter"
                     onClick={() => { setKindFilter("PLAY"); setFlagFilter("ALL"); setSearchText(""); }}
                   >
-                    PLAY only
+                    {t("quick_filter.play_only")}
                   </button>
                   <button
                     type="button"
                     className="ai-chip ai-quickFilter"
                     onClick={() => { setKindFilter("NO_PREDICTION"); setFlagFilter("ALL"); setSearchText(""); }}
                   >
-                    NO_PREDICTION / NO_BET
+                    {t("quick_filter.no_prediction_only")}
                   </button>
                   <button
                     type="button"
                     className="ai-chip ai-quickFilter"
                     onClick={() => { setKindFilter("ALL"); setFlagFilter("ALL"); setSearchText(""); }}
                   >
-                    Clear filters
+                    {t("quick_filter.clear")}
                   </button>
                 </div>
 
@@ -2181,7 +2189,7 @@ function App() {
                         <details key={marketKey} className="ai-marketDetails" open={defaultOpen}>
                           <summary>{marketKey}</summary>
                           <p className="ai-marketDetails__sub">
-                            PLAY: {subCounts.PLAY} · NO_BET: {subCounts.NO_BET} · NO_PREDICTION: {subCounts.NO_PREDICTION}
+                            {labelDecisionKind("PLAY")}: {subCounts.PLAY} · {labelDecisionKind("NO_BET")}: {subCounts.NO_BET} · {labelDecisionKind("NO_PREDICTION")}: {subCounts.NO_PREDICTION}
                           </p>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             {groupDecisions.map((d, idx) => {
@@ -2232,14 +2240,14 @@ function App() {
                       <div className="ai-card" style={{ marginTop: 0 }}>
                         <div className="ai-cardHeader" style={{ marginBottom: 8 }}>
                           <div className="ai-cardTitle">
-                            {selectedMarket} — {getDecisionKind(selectedDecision.decision)}
+                            {selectedMarket} — {labelDecisionKind(selectedDecision.decision ?? "")}
                             <button
                               type="button"
                               className="ai-btn ai-btn--ghost ai-copyBtn"
                               onClick={() => handleCopy("market", selectedMarket ?? "")}
-                              aria-label="Copy market name"
+                              aria-label={t("btn.copy_summary")}
                             >
-                              {copiedKey === "market" ? "Copied" : "Copy"}
+                              {copiedKey === "market" ? t("btn.copied") : t("btn.copy")}
                             </button>
                           </div>
                           <button
@@ -2247,31 +2255,31 @@ function App() {
                             className="ai-btn ai-btn--ghost"
                             onClick={() => { setSelectedDecision(null); setSelectedMarket(null); }}
                           >
-                            Close
+                            {t("btn.close")}
                           </button>
                         </div>
                         <dl style={{ margin: "0 0 12px 0", fontSize: 13 }}>
-                          <dt style={{ fontWeight: 600, marginTop: 8 }}>Decision</dt>
+                          <dt style={{ fontWeight: 600, marginTop: 8 }}>{t("label.decisions")}</dt>
                           <dd style={{ margin: "2px 0 0 0" }}>
                             {selectedDecision.decision ?? "—"}
                             <button
                               type="button"
                               className="ai-btn ai-btn--ghost ai-copyBtn"
                               onClick={() => handleCopy("decision", selectedDecision.decision ?? "")}
-                              aria-label="Copy decision"
+                              aria-label={t("btn.copy_summary")}
                             >
-                              {copiedKey === "decision" ? "Copied" : "Copy"}
+                              {copiedKey === "decision" ? t("btn.copied") : t("btn.copy")}
                             </button>
                           </dd>
-                          <dt style={{ fontWeight: 600, marginTop: 8 }}>Confidence</dt>
+                          <dt style={{ fontWeight: 600, marginTop: 8 }}>{t("label.confidence")}</dt>
                           <dd style={{ margin: "2px 0 0 0" }}>{formatConfidence(selectedDecision.confidence) || "—"}</dd>
-                          <dt style={{ fontWeight: 600, marginTop: 8 }}>Flags</dt>
+                          <dt style={{ fontWeight: 600, marginTop: 8 }}>{t("label.flags")}</dt>
                           <dd style={{ margin: "2px 0 0 0" }}>
                             {flattenFlags(selectedDecision).length > 0
                               ? flattenFlags(selectedDecision).map((f) => <span key={f} className="ai-chip ai-chip--flag" style={{ marginRight: 4 }}>{f}</span>)
                               : "—"}
                           </dd>
-                          <dt style={{ fontWeight: 600, marginTop: 8 }}>Reasons</dt>
+                          <dt style={{ fontWeight: 600, marginTop: 8 }}>{t("label.reasons")}</dt>
                           <dd style={{ margin: "2px 0 0 0" }}>
                             {safeArray<string>(selectedDecision.reasons).length > 0 ? (
                               <ul style={{ margin: 0, paddingLeft: 20 }}>
@@ -2306,7 +2314,7 @@ function App() {
                         </details>
                       </div>
                     ) : (
-                      <p className="ai-muted" style={{ margin: "8px 0" }}>Select a decision to view details.</p>
+                      <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.select_decision_prompt")}</p>
                     )}
                   </div>
                 </div>
@@ -2317,7 +2325,7 @@ function App() {
         </div>
       )}
       <footer className="ai-footer" style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)" }}>
-        App v{appVersion} · BUILD: {BUILD_ID}
+        {t("footer.app_version")} {appVersion} · {t("footer.build")}: {BUILD_ID}
         {" · "}
         <button
           type="button"
@@ -2325,9 +2333,9 @@ function App() {
           style={{ padding: "0 4px", fontSize: "inherit", verticalAlign: "baseline" }}
           onClick={() => setShowSettings((s) => !s)}
           aria-expanded={showSettings}
-          aria-label="Open settings"
+          aria-label={t("btn.settings")}
         >
-          Settings
+          {t("btn.settings")}
         </button>
       </footer>
       </div>

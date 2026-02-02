@@ -2,17 +2,19 @@
  * App shell — fixed dark left sidebar. Icons + labels; active state highlight.
  * No routing; onSelect callback for view switching (placeholder allowed).
  */
+import { t } from "../../i18n";
+
 export interface SidebarProps {
   activeKey?: string;
   onSelect?: (key: string) => void;
 }
 
-type MenuItem = { key: string; label: string; icon: React.ReactNode };
+type MenuItem = { key: string; labelKey: string; icon: React.ReactNode };
 
 const MENU_ITEMS: MenuItem[] = [
   {
     key: "home",
-    label: "Αρχική",
+    labelKey: "nav.home",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -22,7 +24,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     key: "predictions",
-    label: "Προβλέψεις",
+    labelKey: "nav.predictions",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -31,7 +33,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     key: "statistics",
-    label: "Στατιστικά",
+    labelKey: "nav.statistics",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -42,7 +44,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     key: "history",
-    label: "Ιστορικό",
+    labelKey: "nav.history",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
@@ -52,7 +54,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     key: "settings",
-    label: "Ρυθμίσεις",
+    labelKey: "nav.settings",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -76,12 +78,12 @@ export default function Sidebar({ activeKey = "home", onSelect }: SidebarProps) 
             className={`ai-shell-sidebar__item ${activeKey === item.key ? "ai-shell-sidebar__item--active" : ""}`}
             onClick={() => onSelect?.(item.key)}
             aria-current={activeKey === item.key ? "page" : undefined}
-            aria-label={item.label}
+            aria-label={t(item.labelKey)}
           >
             <span className="ai-shell-sidebar__icon" aria-hidden>
               {item.icon}
             </span>
-            <span className="ai-shell-sidebar__label">{item.label}</span>
+            <span className="ai-shell-sidebar__label">{t(item.labelKey)}</span>
           </button>
         ))}
       </nav>

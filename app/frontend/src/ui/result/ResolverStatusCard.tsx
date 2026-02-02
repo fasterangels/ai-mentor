@@ -1,3 +1,4 @@
+import { t, labelResolverStatus } from "../../i18n";
 import type { ResolverVM } from "./types";
 
 export interface ResolverStatusCardProps {
@@ -16,13 +17,13 @@ export default function ResolverStatusCard({ resolver }: ResolverStatusCardProps
   return (
     <div className="ai-card" style={{ flex: "1 1 280px", minWidth: 0 }}>
       <div className="ai-cardHeader">
-        <div className="ai-cardTitle">Resolver</div>
+        <div className="ai-cardTitle">{t("section.resolver")}</div>
       </div>
       <p style={{ margin: "4px 0", fontSize: 14 }}>
-        <span className="ai-status-label">Status:</span>{" "}
-        <span className={statusClass ? `ai-chip ${statusClass}` : ""}>{status}</span>
+        <span className="ai-status-label">{t("label.status")}:</span>{" "}
+        <span className={statusClass ? `ai-chip ${statusClass}` : ""}>{labelResolverStatus(status)}</span>
         {resolver.matchId != null && resolver.matchId !== "" && (
-          <> · Match ID: {resolver.matchId}</>
+          <> · {t("label.match_id")}: {resolver.matchId}</>
         )}
       </p>
       {resolver.notes.length > 0 && (

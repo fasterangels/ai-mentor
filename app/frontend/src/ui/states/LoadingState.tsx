@@ -1,6 +1,8 @@
 /**
  * BLOCK 8.8: Loading state (ANALYZING).
  */
+import { t } from "../../i18n";
+
 export default function LoadingState() {
   return (
     <div className="ai-section">
@@ -16,7 +18,7 @@ export default function LoadingState() {
           <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
         </svg>
         <p className="ai-empty-state__text" aria-live="polite">
-          Analyzing… Cancel to abort.
+          {t("empty.loading_text")}
         </p>
       </div>
     </div>

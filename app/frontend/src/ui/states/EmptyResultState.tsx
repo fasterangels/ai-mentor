@@ -1,15 +1,21 @@
 /**
  * BLOCK 8.8: Empty result state — shown above ResultView when RESULT has emptyKind.
  */
+import { t } from "../../i18n";
 import type { EmptyKind } from "./stateMachine";
+
+const EMPTY_KEYS: Record<EmptyKind, string> = {
+  RESOLVER_NOT_FOUND: "error.resolver_not_found",
+  RESOLVER_AMBIGUOUS: "error.resolver_ambiguous",
+  ANALYZER_NO_PREDICTION: "error.analyzer_no_prediction",
+};
 
 export interface EmptyResultStateProps {
   emptyKind: EmptyKind;
 }
 
-const MESSAGES: Record<EmptyKind, { text: string; icon: React.ReactNode }> = {
+const MESSAGES: Record<EmptyKind, { icon: React.ReactNode }> = {
   RESOLVER_NOT_FOUND: {
-    text: "Match not found in kickoff window.",
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8" />
@@ -19,7 +25,6 @@ const MESSAGES: Record<EmptyKind, { text: string; icon: React.ReactNode }> = {
     ),
   },
   RESOLVER_AMBIGUOUS: {
-    text: "Match could not be resolved uniquely.",
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -29,7 +34,6 @@ const MESSAGES: Record<EmptyKind, { text: string; icon: React.ReactNode }> = {
     ),
   },
   ANALYZER_NO_PREDICTION: {
-    text: "No prediction available for this match.",
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
@@ -41,7 +45,8 @@ const MESSAGES: Record<EmptyKind, { text: string; icon: React.ReactNode }> = {
 };
 
 export default function EmptyResultState({ emptyKind }: EmptyResultStateProps) {
-  const { text, icon } = MESSAGES[emptyKind];
+  const { icon } = MESSAGES[emptyKind];
+  const text = t(EMPTY_KEYS[emptyKind]);
   return (
     <div className="ai-section">
       <div className="ai-card ai-card--warning ai-empty-state" role="status">

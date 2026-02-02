@@ -1,3 +1,4 @@
+import { t, labelAnalyzerOutcome } from "../../i18n";
 import type { AnalyzerVM } from "./types";
 
 export interface AnalyzerOutcomeCardProps {
@@ -14,24 +15,24 @@ export default function AnalyzerOutcomeCard({ analyzer }: AnalyzerOutcomeCardPro
   return (
     <div className="ai-card" style={{ flex: "1 1 280px", minWidth: 0 }}>
       <div className="ai-cardHeader">
-        <div className="ai-cardTitle">Analyzer</div>
+        <div className="ai-cardTitle">{t("section.analyzer")}</div>
       </div>
       <p style={{ margin: "4px 0", fontSize: 14 }}>
-        <span className="ai-status-label">Outcome:</span>{" "}
+        <span className="ai-status-label">{t("label.outcome")}:</span>{" "}
         <span className={outcomeClass ? `ai-chip ${outcomeClass}` : ""}>
-          {isPrediction ? "PREDICTION_AVAILABLE" : isNoPrediction ? "NO_PREDICTION" : outcome}
+          {labelAnalyzerOutcome(outcome)}
         </span>
       </p>
       {analyzer.statusLabel && (
         <p className="ai-muted" style={{ margin: "4px 0", fontSize: 13 }}>
-          <span className="ai-status-label">Status:</span> {analyzer.statusLabel}
+          <span className="ai-status-label">{t("label.status")}:</span> {analyzer.statusLabel}
           {analyzer.logicVersion != null && analyzer.logicVersion !== "" && (
-            <> · Logic: {analyzer.logicVersion}</>
+            <> · {t("label.logic")}: {analyzer.logicVersion}</>
           )}
         </p>
       )}
       <p className="ai-muted" style={{ margin: "4px 0", fontSize: 13 }}>
-        Decisions: {analyzer.decisionCount}
+        {t("label.decisions")}: {analyzer.decisionCount}
       </p>
     </div>
   );

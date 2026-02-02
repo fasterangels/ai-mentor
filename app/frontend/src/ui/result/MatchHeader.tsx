@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { ResultVM } from "./types";
 
 export interface MatchHeaderProps {
@@ -9,12 +10,12 @@ export default function MatchHeader({ vm }: MatchHeaderProps) {
     <div className="ai-section">
       <div className="ai-card">
         <div className="ai-cardHeader">
-          <div className="ai-cardTitle">Match</div>
+          <div className="ai-cardTitle">{t("section.match")}</div>
         </div>
         <p style={{ margin: "4px 0" }}>
-          Home: {vm.homeTeam || "—"} · Away: {vm.awayTeam || "—"}
+          {t("label.home")}: {vm.homeTeam || "—"} · {t("label.away")}: {vm.awayTeam || "—"}
           {vm.matchId != null && vm.matchId !== "" && (
-            <> · Match ID: {vm.matchId}</>
+            <> · {t("label.match_id")}: {vm.matchId}</>
           )}
         </p>
       </div>

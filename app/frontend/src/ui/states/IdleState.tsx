@@ -1,6 +1,8 @@
 /**
  * BLOCK 8.8: Idle state — before any analysis.
  */
+import { t } from "../../i18n";
+
 export default function IdleState() {
   return (
     <div className="ai-section">
@@ -9,7 +11,7 @@ export default function IdleState() {
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
         <p className="ai-empty-state__text">
-          Enter teams and run analysis to see predictions.
+          {t("empty.idle_text")}
         </p>
       </div>
     </div>
