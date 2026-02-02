@@ -17,8 +17,7 @@ import HomeScreen from "./ui/home/HomeScreen";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
 import { t, labelResolverStatus, labelDecisionKind } from "./i18n";
-
-const BUILD_ID = (import.meta.env?.VITE_BUILD_ID as string) ?? "UNKNOWN_BUILD";
+import { buildInfoFormatted } from "./buildInfo";
 
 /** Navigation view (no router). */
 export type View = "HOME" | "NEW_PREDICTION" | "RESULT" | "SUMMARY" | "HISTORY" | "SETTINGS";
@@ -661,11 +660,11 @@ function App() {
       .catch(() => setAppVersion("—"));
   }, []);
 
-  // Log BUILD_ID to app log on startup (Tauri only).
+  // Log build info to app log on startup (Tauri only).
   useEffect(() => {
     if (!isTauri()) return;
     import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke("log_app_message", { message: `FRONTEND_START BUILD_ID=${BUILD_ID}` }))
+      .then(({ invoke }) => invoke("log_app_message", { message: `FRONTEND_START ${buildInfoFormatted}` }))
       .catch(() => {});
   }, []);
 
@@ -1696,7 +1695,7 @@ function App() {
             <p style={{ margin: 0 }}>{t("analysis.backend_starting")}</p>
           </div>
         )}
-        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>{t("footer.build")}: {BUILD_ID}</p>
+        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>{t("footer.build")}: {buildInfoFormatted}</p>
 
         <div className="ai-row ai-row--gap2" style={{ marginBottom: 12 }}>
           <label htmlFor="ai-mentor-home" className="ai-label">{t("label.home")}</label>
@@ -2325,7 +2324,7 @@ function App() {
         </div>
       )}
       <footer className="ai-footer" style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)" }}>
-        {t("footer.app_version")} {appVersion} · {t("footer.build")}: {BUILD_ID}
+        {t("footer.app_version")} {appVersion} · {t("footer.build")}: {buildInfoFormatted}
         {" · "}
         <button
           type="button"
