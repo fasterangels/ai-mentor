@@ -313,6 +313,15 @@ Once running, access interactive API docs:
 - `GET /memories` - List memories
 - `GET /knowledge` - List knowledge entries
 
+**Ground truth & evaluation (Phase 1):**
+- `POST /api/v1/results/attach` - Attach final match result to a snapshot and resolve per-market outcomes. **snapshot_id** is exactly the analysis_run_id (integer as string; one snapshot = one analysis run). Body: `snapshot_id`, `home_goals`, `away_goals`, `status` (FINAL | ABANDONED | POSTPONED | UNKNOWN). Returns `snapshot_id`, `market_outcomes` (one_x_two, over_under_25, gg_ng), `final_result`.
+
+**Offline evaluator (CLI):** From repo root, run:
+```bash
+python tools/offline_evaluator.py --only-final
+```
+Optional: `--from-date`, `--to-date` (ISO8601), `--output PATH` (default: `evaluation_report.json`). Writes aggregate accuracy and reason-effectiveness to the output JSON.
+
 ---
 
 ## 📚 Additional Resources
