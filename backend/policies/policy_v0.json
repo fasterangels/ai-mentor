@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "created_at_utc": "2025-01-01T00:00:00",
+    "notes": "Default v0 policy",
+    "version": "v0"
+  },
+  "markets": {
+    "gg_ng": {
+      "confidence_bands": null,
+      "min_confidence": 0.62
+    },
+    "one_x_two": {
+      "confidence_bands": null,
+      "min_confidence": 0.62
+    },
+    "over_under_25": {
+      "confidence_bands": null,
+      "min_confidence": 0.62
+    }
+  },
+  "reasons": {}
+}
