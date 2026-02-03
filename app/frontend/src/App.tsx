@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { getBackendBaseUrl, isTauri } from "./api/backendBaseUrl";
 import { mapApiToResultVM } from "./ui/result/mapper";
-import ResultView from "./ui/result/ResultView";
+import MatchHeader from "./ui/result/MatchHeader";
+import ResolverStatusCard from "./ui/result/ResolverStatusCard";
+import AnalyzerOutcomeCard from "./ui/result/AnalyzerOutcomeCard";
+import EvaluationPanel from "./ui/result/EvaluationPanel";
+import EvidenceList from "./ui/result/EvidenceList";
+import NotesPanel from "./ui/result/NotesPanel";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./components/ui/accordion";
 import {
   getAnalyzeUIState,
   type ErrorKind,
@@ -11,13 +17,19 @@ import IdleState from "./ui/states/IdleState";
 import LoadingState from "./ui/states/LoadingState";
 import ErrorState from "./ui/states/ErrorState";
 import EmptyResultState from "./ui/states/EmptyResultState";
-import AppSettingsPanel from "./ui/settings/AppSettingsPanel";
+import AppSettingsPanel, { SETTINGS_STORAGE_KEYS } from "./ui/settings/AppSettingsPanel";
 import AppShell from "./ui/shell/AppShell";
 import HomeScreen from "./ui/home/HomeScreen";
+import MatchSelectorPanel, { type PredictionMode } from "./ui/prediction/MatchSelectorPanel";
+import MarketCard from "./ui/prediction/MarketCard";
+import HistoryTable from "./ui/history/HistoryTable";
+import SummaryPage from "./ui/summary/SummaryPage";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
-import { t, labelResolverStatus, labelDecisionKind } from "./i18n";
+import { t, setLang, labelResolverStatus, labelDecisionKind } from "./i18n";
 import { buildInfoFormatted } from "./buildInfo";
+
+const RESULT_ACCORDION_VALUES = ["analysis_details", "match_metadata", "evidence_pack", "exports", "raw_json"] as const;
 
 /** Navigation view (no router). */
 export type View = "HOME" | "NEW_PREDICTION" | "RESULT" | "SUMMARY" | "HISTORY" | "SETTINGS";
@@ -599,7 +611,6 @@ function App() {
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
   const [backendStatus, setBackendStatus] = useState<string | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("—");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bundleFileInputRef = useRef<HTMLInputElement>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -609,6 +620,17 @@ function App() {
   const decisionsHeadingRef = useRef<HTMLDivElement>(null);
   const firstDecisionRowRef = useRef<HTMLDivElement>(null);
   const prevLoadingRef = useRef(loading);
+  const [predictionMode, setPredictionMode] = useState<PredictionMode>("PREGAME");
+  const [league, setLeague] = useState<string>("Super League");
+  const [kickoff, setKickoff] = useState<string>("");
+  const [lastRunMeta, setLastRunMeta] = useState<{
+    home: string;
+    away: string;
+    league: string;
+    kickoff: string;
+    mode: PredictionMode;
+  } | null>(null);
+  const [resultAccordionOpen, setResultAccordionOpen] = useState<string[]>([]);
 
   // Resolve apiBase (fixed 127.0.0.1:8000 in desktop).
   useEffect(() => {
@@ -672,16 +694,14 @@ function App() {
     };
   }, []);
 
-  // App version (Tauri: from API; browser: fallback).
+  // Apply stored language on load (Settings persist to localStorage).
   useEffect(() => {
-    if (!isTauri()) {
-      setAppVersion("0.2.0");
-      return;
+    try {
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEYS.language);
+      if (stored === "el" || stored === "en") setLang(stored);
+    } catch {
+      /* ignore */
     }
-    import("@tauri-apps/api/app")
-      .then(({ getVersion }) => getVersion())
-      .then(setAppVersion)
-      .catch(() => setAppVersion("—"));
   }, []);
 
   // Log build info to app log on startup (Tauri only).
@@ -1284,7 +1304,7 @@ function App() {
       home_text: home,
       away_text: away,
       window_hours: 8760,
-      mode: "PREGAME" as const,
+      mode: predictionMode,
       markets: ["1X2", "OU25", "GGNG"],
       policy: {
         min_sep_1x2: 0.1,
@@ -1293,6 +1313,14 @@ function App() {
         min_confidence: 0.62,
       },
     };
+
+    setLastRunMeta({
+      home,
+      away,
+      league,
+      kickoff: predictionMode === "LIVE" ? "" : kickoff,
+      mode: predictionMode,
+    });
 
     const doFetch = (): Promise<Response> =>
       fetch(endpoint, {
@@ -1515,13 +1543,23 @@ function App() {
     }
   }, [analyzeState]);
 
-  // BLOCK 8.9: Scroll result block to top when entering RESULT
+  // BLOCK 8.9: Scroll result block to top and collapse accordions when entering RESULT
   useEffect(() => {
     if (analyzeState === "RESULT" && prevAnalyzeStateRef.current !== "RESULT" && result) {
       resultBlockRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+      setResultAccordionOpen([]);
     }
     prevAnalyzeStateRef.current = analyzeState;
   }, [analyzeState, result]);
+
+  const openExportsAndScroll = useCallback(() => {
+    setResultAccordionOpen((prev) => (prev.includes("exports") ? prev : [...prev, "exports"]));
+    setTimeout(() => document.getElementById("result-accordion-exports")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 80);
+  }, []);
+  const openRawJsonAndScroll = useCallback(() => {
+    setResultAccordionOpen((prev) => (prev.includes("raw_json") ? prev : [...prev, "raw_json"]));
+    setTimeout(() => document.getElementById("result-accordion-raw_json")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 80);
+  }, []);
 
   // BLOCK 8.9: Enter = Analyze (from team inputs), Esc = clear results
   const runAnalyzeRef = useRef(runAnalyze);
@@ -1617,6 +1655,8 @@ function App() {
           if (key === "settings") setView("SETTINGS");
         }}
         pageTitle={viewToPageTitle(view)}
+        showSearchInTopbar={view !== "HOME"}
+        showStatusInTopbar={view !== "HOME"}
         statusLabel={
           isTauri() && backendStatus?.startsWith("NOT_READY")
             ? t("backend.status_not_ready")
@@ -1667,47 +1707,33 @@ function App() {
         )}
         {view === "SUMMARY" && (
           <div className="ai-container">
-            <div className="ai-card">
-              <h2 className="ai-cardTitle" style={{ marginBottom: 8 }}>{t("summary.placeholder_title")}</h2>
-              <p className="ai-muted" style={{ margin: 0 }}>{t("summary.placeholder_desc")}</p>
-            </div>
+            <SummaryPage
+              snapshots={snapshots.map((s) => ({
+                id: s.id,
+                created_at: s.created_at,
+                success: (s as Snapshot & { success?: boolean }).success,
+              }))}
+            />
           </div>
         )}
         {view === "HISTORY" && (
           <div className="ai-container">
-            <div className="ai-card">
-              <div className="ai-cardHeader"><div className="ai-cardTitle">{t("history.title")}</div></div>
-              {snapshotError && (
-                <p className="ai-muted" style={{ margin: "0 0 8px 0", color: "var(--error)" }} role="alert">{snapshotError}</p>
-              )}
-              <details open>
-                <summary className="ai-summary">{t("section.snapshots")} ({snapshots.length})</summary>
-                <div style={{ marginTop: 8 }}>
-                  {snapshots.length === 0 ? (
-                    <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.snapshots_none")}</p>
-                  ) : (
-                    <>
-                      {snapshots.slice().reverse().map((snap) => (
-                        <div key={snap.id} className="ai-snapshotRow">
-                          <span className="ai-muted" style={{ fontSize: 11 }}>
-                            {new Date(snap.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
-                            {" · "}{snap.homeTeam} vs {snap.awayTeam}
-                            {" · "}{labelResolverStatus(snap.resolver?.status ?? snap.status ?? "")}
-                            {" · "}{(snap.size_bytes / 1024).toFixed(1)} KB
-                          </span>
-                          <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => { loadSnapshot(snap); setView("NEW_PREDICTION"); }}>{t("btn.load")}</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>{t("btn.download")}</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>{t("btn.delete")}</button>
-                          </span>
-                        </div>
-                      ))}
-                      <button type="button" className="ai-btn ai-btn--ghost" style={{ marginTop: 8 }} onClick={deleteAllSnapshots}>{t("btn.delete_all")}</button>
-                    </>
-                  )}
-                </div>
-              </details>
-            </div>
+            <h1 className="ai-cardTitle" style={{ marginBottom: 12 }}>{t("history.title")}</h1>
+            {snapshotError && (
+              <p className="ai-muted" style={{ margin: "0 0 12px 0", color: "var(--error)" }} role="alert">{snapshotError}</p>
+            )}
+            <HistoryTable
+              rows={snapshots.slice().reverse()}
+              onRowClick={(snap) => {
+                loadSnapshot(snap);
+                setView("NEW_PREDICTION");
+              }}
+            />
+            {snapshots.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="ai-btn ai-btn--ghost" onClick={deleteAllSnapshots}>{t("btn.delete_all")}</button>
+              </div>
+            )}
           </div>
         )}
         {view === "SETTINGS" && (
@@ -1715,12 +1741,15 @@ function App() {
             <AppSettingsPanel
               analyzerVersionFromResult={result != null ? mapApiToResultVM(result, { homeTeam: home, awayTeam: away }).analyzer.logicVersion ?? null : null}
               onClose={() => setView("HOME")}
+              onClearHistory={() => {
+                saveSnapshotsList([]);
+                setSnapshots([]);
+              }}
             />
           </div>
         )}
         {view === "NEW_PREDICTION" && (
       <div className="ai-container">
-        <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>{t("analysis.title")}</h1>
         {isTauri() && backendStatus?.startsWith("NOT_READY") && (
           <div className="ai-card ai-card--error" style={{ marginBottom: 12 }} role="alert">
             <p style={{ margin: 0 }}>
@@ -1754,39 +1783,24 @@ function App() {
             <p style={{ margin: 0 }}>{t("analysis.backend_starting")}</p>
           </div>
         )}
-        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>{t("footer.build")}: {buildInfoFormatted}</p>
+        <p className="ai-muted" style={{ margin: "0 0 12px 0", fontSize: 12 }}>{t("footer.app_version")} {buildInfoFormatted}</p>
 
-        <div className="ai-row ai-row--gap2" style={{ marginBottom: 12 }}>
-          <label htmlFor="ai-mentor-home" className="ai-label">{t("label.home")}</label>
-          <input
-            id="ai-mentor-home"
-            className="ai-input"
-            value={home}
-            onChange={(e) => setHome(e.target.value)}
-            placeholder={t("analysis.home_team_placeholder")}
-            disabled={loading}
-            aria-label={t("label.home")}
-          />
-          <button
-            type="button"
-            className="ai-btn ai-btn--ghost"
-            onClick={() => { const h = home; setHome(away); setAway(h); }}
-            disabled={loading}
-            aria-label={t("btn.swap")}
-          >
-            {t("btn.swap")}
-          </button>
-          <label htmlFor="ai-mentor-away" className="ai-label">{t("label.away")}</label>
-          <input
-            id="ai-mentor-away"
-            className="ai-input"
-            value={away}
-            onChange={(e) => setAway(e.target.value)}
-            placeholder={t("analysis.away_placeholder")}
-            disabled={loading}
-            aria-label={t("label.away")}
-          />
-        </div>
+        <MatchSelectorPanel
+          mode={predictionMode}
+          onModeChange={(m) => {
+            setPredictionMode(m);
+            if (m === "LIVE") setKickoff("");
+          }}
+          league={league}
+          onLeagueChange={setLeague}
+          homeTeam={home}
+          onHomeTeamChange={setHome}
+          awayTeam={away}
+          onAwayTeamChange={setAway}
+          dateTime={kickoff}
+          onDateTimeChange={setKickoff}
+          disabled={loading}
+        />
 
         <div className="ai-row ai-row--gap2" style={{ marginBottom: 16 }}>
           <button
@@ -1838,6 +1852,10 @@ function App() {
                 : null
             }
             onClose={() => setShowSettings(false)}
+            onClearHistory={() => {
+              saveSnapshotsList([]);
+              setSnapshots([]);
+            }}
           />
         )}
         {/* BLOCK 8.8: IDLE */}
@@ -1857,272 +1875,156 @@ function App() {
           />
         )}
 
-        {/* BLOCK 8.8: RESULT — ResultView; empty state banner above when applicable */}
+        {/* BLOCK 8.8: RESULT — Prediction layout + canonical ResultView; NO_PREDICTION handled explicitly */}
       {analyzeState === "RESULT" && result && (
         <div ref={resultBlockRef} className="ai-result-block" role="region" aria-label={t("status.region_result")}>
           {emptyKind != null && <EmptyResultState emptyKind={emptyKind} />}
-          {/* BLOCK 8.7: Canonical Result View (view-model, no raw JSON dump) */}
-          <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
-            <ResultView
-              vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })}
-              onExport={handleExportResultSummary}
-            />
-          </div>
 
-          {/* Show raw JSON (debug) — collapsed by default; hidden when printing (BLOCK 2) */}
-          <div className="ai-section ai-no-print">
-            <div className="ai-card">
-              <details>
-                <summary className="ai-summary">{t("raw_json_show")}</summary>
-                <pre className="ai-pre ai-mono" style={{ marginTop: 8 }}>{safeStringify(result)}</pre>
-              </details>
-            </div>
-          </div>
+          {(() => {
+            const vm = mapApiToResultVM(result, { homeTeam: home, awayTeam: away });
+            const outcome = String(vm.analyzer.outcome ?? "").toUpperCase();
 
-          {/* Export card (BLOCK 9.1 + 9.2) */}
-          <div className="ai-section">
-            <div className="ai-card">
-              <div className="ai-cardHeader">
-                <div className="ai-cardTitle">{t("section.export")}</div>
-              </div>
-              <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={handleCopySummary}
-                  aria-label={t("btn.copy_summary")}
-                >
-                  {copiedKey === "summary" ? t("btn.copied") : t("btn.copy_summary")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={handleDownloadResultJson}
-                  aria-label={t("btn.download_result_json")}
-                >
-                  {t("btn.download_result_json")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={handleExportAnalysisJson}
-                  aria-label={t("btn.export_analysis_json")}
-                >
-                  {t("btn.export_analysis_json")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={handleExportAnalysisPdf}
-                  aria-label={t("btn.export_analysis_pdf")}
-                >
-                  {t("btn.export_analysis_pdf")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={handleDownloadSelectedDecisionJson}
-                  disabled={selectedDecision == null}
-                  aria-label={t("btn.download_decision_json")}
-                >
-                  {t("btn.download_decision_json")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--accent"
-                  onClick={handleSaveSnapshot}
-                  aria-label={t("btn.save_snapshot")}
-                >
-                  {t("btn.save_snapshot")}
-                </button>
-              </div>
-              {exportAnalysisError && (
-                <p className="ai-muted" style={{ margin: "8px 0 0 0", color: "var(--error)" }} role="alert">
-                  {t("export_failed")}: {exportAnalysisError}
-                </p>
-              )}
-              {exportPdfError && (
-                <p className="ai-muted" style={{ margin: "8px 0 0 0", color: "var(--error)" }} role="alert">
-                  {t("pdf_export_failed")}: {exportPdfError}
-                </p>
-              )}
-
-              {/* CSV (BLOCK 9.2) */}
-              <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-                <span className="ai-label">{t("label.csv_delimiter")}:</span>
-                <select
-                  className="ai-select"
-                  value={csvDelimiter}
-                  onChange={(e) => setCsvDelimiter(e.target.value as ";" | ",")}
-                  aria-label={t("label.csv_delimiter")}
-                >
-                  <option value=";">{t("csv_semicolon")}</option>
-                  <option value=",">{t("csv_comma")}</option>
-                </select>
-                <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("filtered")}>
-                  {t("btn.download_csv_filtered")}
-                </button>
-                <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("all")}>
-                  {t("btn.download_csv_all")}
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn ai-btn--ghost"
-                  onClick={() => handleDownloadCsv("selectedMarket")}
-                  disabled={selectedMarket == null}
-                >
-                  {t("btn.download_csv_market")}
-                </button>
-              </div>
-
-              {/* Print report (BLOCK 9.2) */}
-              <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-                <span className="ai-label">{t("label.report_scope")}:</span>
-                <select
-                  className="ai-select"
-                  value={reportScope}
-                  onChange={(e) => setReportScope(e.target.value as "FILTERED" | "ALL")}
-                  aria-label={t("label.report_scope")}
-                >
-                  <option value="FILTERED">{t("report.scope_filtered")}</option>
-                  <option value="ALL">{t("report.scope_all")}</option>
-                </select>
-                <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={reportIncludeAppendices}
-                    onChange={(e) => setReportIncludeAppendices(e.target.checked)}
-                    aria-label={t("label.include_appendices")}
-                  />
-                  <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.include_appendices")}</span>
-                </label>
-                <button type="button" className="ai-btn ai-btn--accent" onClick={handlePrintReport}>
-                  {t("btn.print_report")}
-                </button>
-              </div>
-              {reportError && (
-                <p className="ai-muted" style={{ margin: "0 0 8px 0", color: "var(--error)" }} role="alert">
-                  {reportError}
-                </p>
-              )}
-
-              {/* Import / Bundle (BLOCK 9.3) */}
-              <div className="ai-importBox">
-                <div className="ai-cardTitle" style={{ marginBottom: 6 }}>{t("section.import_bundle")}</div>
-                <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 6 }}>
-                  <span className="ai-label">{t("label.import_json")}:</span>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleImportFileChange}
-                    style={{ display: "none" }}
-                    aria-label={t("btn.import_file")}
-                  />
-                  <button type="button" className="ai-btn ai-btn--ghost" onClick={() => fileInputRef.current?.click()}>
-                    {t("btn.import_file")}
-                  </button>
-                  <button type="button" className="ai-btn ai-btn--ghost" onClick={clearImportMessage}>
-                    {t("btn.clear_import_msg")}
-                  </button>
+            if (outcome === "NO_PREDICTION") {
+              return (
+                <div className="ai-section">
+                  <div className="ai-card ai-card--warning">
+                    <div className="ai-cardHeader">
+                      <div className="ai-cardTitle">{t("predictions.no_prediction_title")}</div>
+                    </div>
+                    <p className="ai-muted" style={{ margin: 0 }}>{t("predictions.no_prediction_body")}</p>
+                  </div>
                 </div>
-                {importStatus && (
-                  <p
-                    className="ai-muted"
-                    style={{
-                      margin: "0 0 8px 0",
-                      fontSize: 12,
-                      color: importStatus.startsWith("error:") ? "var(--error)" : importStatus.startsWith("Imported") || importStatus.startsWith(t("import.imported_prefix")) ? "var(--success)" : undefined,
-                    }}
-                    role="alert"
-                  >
-                    {importStatus}
-                  </p>
-                )}
-                <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-                  <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadSnapshotsBundle}>
-                    {t("btn.download_bundle")}
-                  </button>
-                  <input
-                    ref={bundleFileInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleBundleFileChange}
-                    style={{ display: "none" }}
-                    aria-label={t("btn.import_bundle")}
-                  />
-                  <button type="button" className="ai-btn ai-btn--ghost" onClick={() => bundleFileInputRef.current?.click()}>
-                    {t("btn.import_bundle")}
-                  </button>
-                  <span className="ai-label">{t("label.bundle_import")}:</span>
-                  <select
-                    className="ai-select"
-                    value={bundleImportMode}
-                    onChange={(e) => setBundleImportMode(e.target.value as "merge" | "replace")}
-                    aria-label={t("label.bundle_import")}
-                  >
-                    <option value="merge">{t("import.merge")}</option>
-                    <option value="replace">{t("import.replace")}</option>
-                  </select>
-                  <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={bundleDedupe}
-                      onChange={(e) => setBundleDedupe(e.target.checked)}
-                      aria-label={t("label.dedupe")}
-                    />
-                    <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.dedupe")}</span>
-                  </label>
-                </div>
-              </div>
+              );
+            }
 
-              {snapshotError && (
-                <p className="ai-muted" style={{ margin: "0 0 8px 0", color: "var(--error)" }} role="alert">
-                  {snapshotError}
-                </p>
-              )}
-              <details>
-                <summary className="ai-summary">{t("section.snapshots")} ({snapshots.length})</summary>
-                <div style={{ marginTop: 8 }}>
-                  {snapshots.length === 0 ? (
-                    <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.snapshots_none")}</p>
-                  ) : (
-                    <>
-                      {snapshots.slice().reverse().map((snap) => (
-                        <div key={snap.id} className="ai-snapshotRow">
-                          <span className="ai-muted" style={{ fontSize: 11 }}>
-                            {new Date(snap.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
-                            {" · "}
-                            {snap.homeTeam} vs {snap.awayTeam}
-                            {" · "}
-                            {labelResolverStatus(snap.resolver?.status ?? snap.status ?? "")}
-                            {" · "}
-                            {(snap.size_bytes / 1024).toFixed(1)} KB
-                          </span>
-                          <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => loadSnapshot(snap)}>{t("btn.load")}</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>{t("btn.download")}</button>
-                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>{t("btn.delete")}</button>
-                          </span>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        className="ai-btn ai-btn--ghost"
-                        style={{ marginTop: 8 }}
-                        onClick={deleteAllSnapshots}
-                      >
-                        {t("btn.delete_all")}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </details>
-            </div>
-          </div>
+            const decisionsList = safeArray<Decision>(result?.analyzer?.decisions);
+            const marketMap = buildMarketGroups(decisionsList);
+            const allMarkets = Array.from(marketMap.keys());
+            const group1 = (allMarkets[0] && marketMap.get(allMarkets[0])) || [];
+            const group2 = (allMarkets[1] && marketMap.get(allMarkets[1])) || [];
+            const group3 = (allMarkets[2] && marketMap.get(allMarkets[2])) || [];
 
-          {/* 4) Decisions — Market-centric UI (BLOCK 8.8) */}
-          <div className="ai-section">
+            const toPercent = (conf?: number): number | null => {
+              if (typeof conf !== "number" || Number.isNaN(conf)) return null;
+              if (conf >= 0 && conf <= 1) return Math.round(conf * 100);
+              if (conf > 1 && conf <= 100) return Math.round(conf);
+              return null;
+            };
+
+            const makeRows = (group: Decision[]) => {
+              if (!group || group.length === 0) return [];
+              const playDecision = group.find((d) => getDecisionKind(d.decision) === "PLAY");
+              return group.map((d) => ({
+                label: String(d.decision ?? "") || "—",
+                percent: toPercent(d.confidence),
+                recommended: playDecision != null && playDecision.decision === d.decision,
+              }));
+            };
+
+            const rows1 = makeRows(group1);
+            const rows2 = makeRows(group2);
+            const rows3 = makeRows(group3);
+
+            const cardConfLevel = (rows: { percent?: number | null }[]): "high" | "medium" | "low" | null => {
+              const max = rows.reduce<number | null>((m, r) => {
+                const p = r.percent;
+                if (typeof p !== "number" || Number.isNaN(p)) return m;
+                return m == null ? p : Math.max(m, p);
+              }, null);
+              if (max == null) return null;
+              return max >= 65 ? "high" : max >= 45 ? "medium" : "low";
+            };
+            const confidenceCard1 = cardConfLevel(rows1);
+            const confidenceCard2 = cardConfLevel(rows2);
+            const confidenceCard3 = cardConfLevel(rows3);
+
+            const meta = lastRunMeta ?? {
+              home,
+              away,
+              league,
+              kickoff,
+              mode: predictionMode,
+            };
+            const matchLabel = `${meta.home || "—"} vs ${meta.away || "—"}`;
+            const metaLine = meta.league
+              ? meta.kickoff
+                ? `${meta.league} · ${new Date(meta.kickoff).toLocaleString()}`
+                : meta.league
+              : meta.kickoff
+                ? new Date(meta.kickoff).toLocaleString()
+                : "";
+            const modeLabel = meta.mode === "LIVE" ? t("predictions.mode_live") : t("predictions.mode_pregame");
+
+            const playDecision =
+              decisionsList.find((d) => getDecisionKind(d.decision) === "PLAY") ?? decisionsList[0] ?? null;
+            const summary = playDecision ? String(playDecision.decision ?? "") : "";
+            const reasons = playDecision ? safeArray<string>(playDecision.reasons) : [];
+            const reasoning = reasons.length ? reasons.slice(0, 3).join(" · ") : "";
+            const statusLabel = vm.analyzer.statusLabel || undefined;
+
+            const maxConf = decisionsList.reduce<number | null>((acc, d) => {
+              const c = d.confidence;
+              if (typeof c !== "number" || Number.isNaN(c)) return acc;
+              const n = c <= 1 ? c : c / 100;
+              return acc == null ? n : Math.max(acc, n);
+            }, null);
+            const confidenceLevel: "high" | "medium" | "low" =
+              maxConf == null ? "low" : maxConf >= 0.65 ? "high" : maxConf >= 0.45 ? "medium" : "low";
+
+            return (
+              <>
+                {/* Decision Zone — single dominant block: header + 3 cards + 2 primary actions */}
+                <div className="ai-decisionZone">
+                  <header className="ai-decisionZone__header" aria-label={t("section.match")}>
+                    <div className="ai-decisionZone__headerMain">
+                      <span className="ai-decisionZone__match">{matchLabel}</span>
+                      {metaLine && <span className="ai-decisionZone__meta">{metaLine}</span>}
+                      <span className="ai-decisionZone__mode">{modeLabel}</span>
+                      <span className={`ai-confidenceBadge ai-confidenceBadge--${confidenceLevel}`} title={t("label.confidence")} aria-label={`${t("label.confidence")}: ${t(`confidence.${confidenceLevel}`)}`}>
+                        {t(`confidence.${confidenceLevel}`)}
+                      </span>
+                    </div>
+                  </header>
+                  <div className="ai-marketGrid">
+                    <MarketCard title={t("predictions.market_1x2")} rows={rows1} confidenceLevel={confidenceCard1} confidenceLabel={confidenceCard1 ? t(`confidence.${confidenceCard1}`) : undefined} />
+                    <MarketCard title={t("predictions.market_over_under_25")} rows={rows2} confidenceLevel={confidenceCard2} confidenceLabel={confidenceCard2 ? t(`confidence.${confidenceCard2}`) : undefined} />
+                    <MarketCard title={t("predictions.market_goal_no_goal")} rows={rows3} confidenceLevel={confidenceCard3} confidenceLabel={confidenceCard3 ? t(`confidence.${confidenceCard3}`) : undefined} />
+                  </div>
+                  <div className="ai-decisionZone__actions">
+                    <button type="button" className="ai-btn ai-btn--accent ai-btn--sm" onClick={handleSaveSnapshot} aria-label={t("btn.save_snapshot")}>
+                      {t("btn.save_snapshot")}
+                    </button>
+                    <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={openExportsAndScroll} aria-label={t("btn.export")}>
+                      {t("btn.export")}
+                    </button>
+                  </div>
+                </div>
+
+                {/* More details — toolbar + controlled accordion */}
+                <div className="ai-accordionToolbar">
+                  <p className="ai-decisionZone__moreLabel">{t("result.more_details")}</p>
+                  <div className="ai-accordionToolbar__actions">
+                    <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={() => setResultAccordionOpen([...RESULT_ACCORDION_VALUES])} aria-label={t("result.expand_all")}>
+                      {t("result.expand_all")}
+                    </button>
+                    <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={() => setResultAccordionOpen([])} aria-label={t("result.collapse_all")}>
+                      {t("result.collapse_all")}
+                    </button>
+                  </div>
+                </div>
+                <Accordion type="multiple" value={resultAccordionOpen} onValueChange={setResultAccordionOpen} className="ai-resultDetailsAccordion">
+                  {/* 1) Analysis Details: Resolver + Analyzer + Evaluation + Notes + Decisions */}
+                  <AccordionItem value="analysis_details">
+                    <AccordionTrigger className="ai-accordionTrigger">{t("result.accordion_analysis_details")}</AccordionTrigger>
+                    <AccordionContent className="ai-accordionContent ai-accordionContent--compact">
+                      <div className="ai-accordionBlock">
+                        <ResolverStatusCard resolver={vm.resolver} />
+                        <AnalyzerOutcomeCard analyzer={vm.analyzer} />
+                      </div>
+                      <EvaluationPanel items={vm.evaluation} />
+                      <NotesPanel notes={vm.notes} warnings={vm.warnings} />
+                      <div className="ai-accordionBlock ai-accordionBlock--decisions">
+          <div className="ai-section ai-section--compact">
           <div className="ai-card ai-card--full">
             <div
               className="ai-cardHeader"
@@ -2350,24 +2252,24 @@ function App() {
                         </dl>
                         {(selectedDecision.probabilities && Object.keys(selectedDecision.probabilities).length > 0) && (
                           <details>
-                            <summary className="ai-summary">Probabilities</summary>
+                            <summary className="ai-summary">{t("result.detail_probabilities")}</summary>
                             <pre className="ai-pre ai-mono">{safeStringify(selectedDecision.probabilities)}</pre>
                           </details>
                         )}
                         {(selectedDecision.policy && Object.keys(selectedDecision.policy).length > 0) && (
                           <details>
-                            <summary className="ai-summary">Policy</summary>
+                            <summary className="ai-summary">{t("result.detail_policy")}</summary>
                             <pre className="ai-pre ai-mono">{safeStringify(selectedDecision.policy)}</pre>
                           </details>
                         )}
                         {selectedDecision.evidence_refs != null && (
                           <details>
-                            <summary className="ai-summary">Evidence refs</summary>
+                            <summary className="ai-summary">{t("result.detail_evidence_refs")}</summary>
                             <pre className="ai-pre ai-mono">{safeStringify(selectedDecision.evidence_refs)}</pre>
                           </details>
                         )}
                         <details>
-                          <summary className="ai-summary">Decision raw JSON</summary>
+                          <summary className="ai-summary">{t("result.detail_decision_raw")}</summary>
                           <pre className="ai-pre ai-mono">{safeStringify(selectedDecision)}</pre>
                         </details>
                       </div>
@@ -2380,10 +2282,170 @@ function App() {
             )}
           </div>
           </div>
+          </div>
+                      <footer className="ai-accordionFooter">
+                        <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={openRawJsonAndScroll} aria-label={t("result.open_raw_json")}>
+                          {t("result.open_raw_json")}
+                        </button>
+                      </footer>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 2) Match & Metadata */}
+                  <AccordionItem value="match_metadata">
+                    <AccordionTrigger className="ai-accordionTrigger">{t("result.accordion_match_metadata")}</AccordionTrigger>
+                    <AccordionContent className="ai-accordionContent ai-accordionContent--compact">
+                      <MatchHeader vm={vm} />
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 3) Evidence Pack */}
+                  <AccordionItem value="evidence_pack">
+                    <AccordionTrigger className="ai-accordionTrigger">{t("result.accordion_evidence_pack")}</AccordionTrigger>
+                    <AccordionContent className="ai-accordionContent ai-accordionContent--compact">
+                      <EvidenceList items={vm.evidence} />
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 4) Exports — 4 actions + Advanced (collapsed) */}
+                  <AccordionItem value="exports" id="result-accordion-exports">
+                    <AccordionTrigger className="ai-accordionTrigger">{t("result.accordion_exports")}</AccordionTrigger>
+                    <AccordionContent className="ai-accordionContent ai-accordionContent--compact">
+                      <div className="ai-exportPrimary">
+                        <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={() => handleExportResultSummary(vm)} aria-label={t("result.export_pdf")}>
+                          {t("result.export_pdf")}
+                        </button>
+                        <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={() => handleDownloadCsv("filtered")} aria-label={t("result.export_csv")}>
+                          {t("result.export_csv")}
+                        </button>
+                        <button type="button" className="ai-btn ai-btn--ghost ai-btn--sm" onClick={handleDownloadResultJson} aria-label={t("result.export_json")}>
+                          {t("result.export_json")}
+                        </button>
+                        <button type="button" className="ai-btn ai-btn--accent ai-btn--sm" onClick={handleSaveSnapshot} aria-label={t("result.export_snapshot")}>
+                          {t("result.export_snapshot")}
+                        </button>
+                      </div>
+                      {exportAnalysisError && (
+                        <p className="ai-muted ai-exportError" role="alert">{t("export_failed")}: {exportAnalysisError}</p>
+                      )}
+                      {exportPdfError && (
+                        <p className="ai-muted ai-exportError" role="alert">{t("pdf_export_failed")}: {exportPdfError}</p>
+                      )}
+                      <details className="ai-exportAdvanced">
+                        <summary className="ai-summary">{t("result.export_advanced")}</summary>
+                        <div className="ai-exportAdvanced__inner">
+                          <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={handleCopySummary} aria-label={t("btn.copy_summary")}>
+                              {copiedKey === "summary" ? t("btn.copied") : t("btn.copy_summary")}
+                            </button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={handleExportAnalysisJson} aria-label={t("btn.export_analysis_json")}>{t("btn.export_analysis_json")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={handleExportAnalysisPdf} aria-label={t("btn.export_analysis_pdf")}>{t("btn.export_analysis_pdf")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadSelectedDecisionJson} disabled={selectedDecision == null} aria-label={t("btn.download_decision_json")}>{t("btn.download_decision_json")}</button>
+                          </div>
+                          <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+                            <span className="ai-label">{t("label.csv_delimiter")}:</span>
+                            <select className="ai-select" value={csvDelimiter} onChange={(e) => setCsvDelimiter(e.target.value as ";" | ",")} aria-label={t("label.csv_delimiter")}>
+                              <option value=";">{t("csv_semicolon")}</option>
+                              <option value=",">{t("csv_comma")}</option>
+                            </select>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("filtered")}>{t("btn.download_csv_filtered")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("all")}>{t("btn.download_csv_all")}</button>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={() => handleDownloadCsv("selectedMarket")} disabled={selectedMarket == null}>{t("btn.download_csv_market")}</button>
+                          </div>
+                          <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+                            <span className="ai-label">{t("label.report_scope")}:</span>
+                            <select className="ai-select" value={reportScope} onChange={(e) => setReportScope(e.target.value as "FILTERED" | "ALL")} aria-label={t("label.report_scope")}>
+                              <option value="FILTERED">{t("report.scope_filtered")}</option>
+                              <option value="ALL">{t("report.scope_all")}</option>
+                            </select>
+                            <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
+                              <input type="checkbox" checked={reportIncludeAppendices} onChange={(e) => setReportIncludeAppendices(e.target.checked)} aria-label={t("label.include_appendices")} />
+                              <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.include_appendices")}</span>
+                            </label>
+                            <button type="button" className="ai-btn ai-btn--ghost" onClick={handlePrintReport}>{t("btn.print_report")}</button>
+                          </div>
+                          {reportError && <p className="ai-muted" style={{ color: "var(--error)" }} role="alert">{reportError}</p>}
+                          <div className="ai-importBox">
+                            <div className="ai-cardTitle" style={{ marginBottom: 6 }}>{t("section.import_bundle")}</div>
+                            <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", marginBottom: 6 }}>
+                              <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImportFileChange} style={{ display: "none" }} aria-label={t("btn.import_file")} />
+                              <button type="button" className="ai-btn ai-btn--ghost" onClick={() => fileInputRef.current?.click()}>{t("btn.import_file")}</button>
+                              <button type="button" className="ai-btn ai-btn--ghost" onClick={clearImportMessage}>{t("btn.clear_import_msg")}</button>
+                            </div>
+                            {importStatus && (
+                              <p className="ai-muted" style={{ margin: "0 0 8px 0", fontSize: 12, color: importStatus.startsWith("error:") ? "var(--error)" : importStatus.startsWith("Imported") || importStatus.startsWith(t("import.imported_prefix")) ? "var(--success)" : undefined }} role="alert">{importStatus}</p>
+                            )}
+                            <div className="ai-row ai-row--gap2" style={{ flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                              <button type="button" className="ai-btn ai-btn--ghost" onClick={handleDownloadSnapshotsBundle}>{t("btn.download_bundle")}</button>
+                              <input ref={bundleFileInputRef} type="file" accept=".json,application/json" onChange={handleBundleFileChange} style={{ display: "none" }} aria-label={t("btn.import_bundle")} />
+                              <button type="button" className="ai-btn ai-btn--ghost" onClick={() => bundleFileInputRef.current?.click()}>{t("btn.import_bundle")}</button>
+                              <span className="ai-label">{t("label.bundle_import")}:</span>
+                              <select className="ai-select" value={bundleImportMode} onChange={(e) => setBundleImportMode(e.target.value as "merge" | "replace")} aria-label={t("label.bundle_import")}>
+                                <option value="merge">{t("import.merge")}</option>
+                                <option value="replace">{t("import.replace")}</option>
+                              </select>
+                              <label className="ai-row" style={{ alignItems: "center", gap: 6 }}>
+                                <input type="checkbox" checked={bundleDedupe} onChange={(e) => setBundleDedupe(e.target.checked)} aria-label={t("label.dedupe")} />
+                                <span className="ai-muted" style={{ fontSize: 12 }}>{t("label.dedupe")}</span>
+                              </label>
+                            </div>
+                          </div>
+                          {snapshotError && <p className="ai-muted" style={{ color: "var(--error)" }} role="alert">{snapshotError}</p>}
+                          <details>
+                            <summary className="ai-summary">{t("section.snapshots")} ({snapshots.length})</summary>
+                            <div style={{ marginTop: 8 }}>
+                              {snapshots.length === 0 ? (
+                                <p className="ai-muted" style={{ margin: "8px 0" }}>{t("empty.snapshots_none")}</p>
+                              ) : (
+                                <>
+                                  {snapshots.slice().reverse().map((snap) => (
+                                    <div key={snap.id} className="ai-snapshotRow">
+                                      <span className="ai-muted" style={{ fontSize: 11 }}>
+                                        {new Date(snap.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                                        {" · "}{snap.homeTeam} vs {snap.awayTeam}
+                                        {" · "}{labelResolverStatus(snap.resolver?.status ?? snap.status ?? "")}
+                                        {" · "}{(snap.size_bytes / 1024).toFixed(1)} KB
+                                      </span>
+                                      <span className="ai-row ai-row--gap2" style={{ marginTop: 4 }}>
+                                        <button type="button" className="ai-btn ai-btn--ghost" onClick={() => loadSnapshot(snap)}>{t("btn.load")}</button>
+                                        <button type="button" className="ai-btn ai-btn--ghost" onClick={() => downloadJson(`ai-mentor_snapshot_${snap.id}.json`, snap.result)}>{t("btn.download")}</button>
+                                        <button type="button" className="ai-btn ai-btn--ghost" onClick={() => deleteSnapshot(snap.id)}>{t("btn.delete")}</button>
+                                      </span>
+                                    </div>
+                                  ))}
+                                  <button type="button" className="ai-btn ai-btn--ghost" style={{ marginTop: 8 }} onClick={deleteAllSnapshots}>{t("btn.delete_all")}</button>
+                                </>
+                              )}
+                            </div>
+                          </details>
+                        </div>
+                      </details>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 5) Raw JSON (debug) */}
+                  <AccordionItem value="raw_json" id="result-accordion-raw_json">
+                    <AccordionTrigger className="ai-accordionTrigger">{t("result.accordion_raw_json")}</AccordionTrigger>
+                    <AccordionContent className="ai-accordionContent ai-accordionContent--compact ai-no-print">
+                      <pre className="ai-pre ai-mono ai-pre--compact">{safeStringify(result)}</pre>
+                      {lastErrorDebug != null && (
+                        <div className="ai-debugBlock">
+                          {lastErrorDebug.responsePreview != null && (
+                            <pre className="ai-pre ai-mono ai-pre--compact" style={{ maxHeight: 200, overflow: "auto" }}>{lastErrorDebug.responsePreview.slice(0, 2000)}</pre>
+                          )}
+                          <button type="button" className="ai-btn ai-btn--ghost" onClick={copyDebugInfo} aria-label={t("btn.copy_debug")}>{t("btn.copy_debug")}</button>
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </>
+            );
+          })()}
         </div>
       )}
       <footer className="ai-footer" style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)" }}>
-        {t("footer.app_version")} {appVersion} · {t("footer.build")}: {buildInfoFormatted}
+        {t("footer.app_version")} {buildInfoFormatted}
         {" · "}
         <button
           type="button"

@@ -1,10 +1,10 @@
-# Release: on tag v* build Windows desktop and publish GitHub Release with installer + logs.
+# Release: on tag v*.*.* build Windows desktop and publish GitHub Release with NSIS + MSI.
 name: release
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 jobs:
   build-and-release:
@@ -144,9 +144,14 @@ jobs:
         working-directory: app/frontend
         run: npm run build
 
-      - name: Build Tauri NSIS installer
+      - name: Build Tauri (NSIS + MSI)
         working-directory: app/frontend
         run: npx tauri build
+
+      - name: Set version from tag
+        id: version
+        shell: pwsh
+        run: echo "ver=$('${{ github.ref_name }}'.TrimStart('v'))" >> $env:GITHUB_OUTPUT
 
       - name: Copy backend.log and ensure artifact files exist
         if: always()
@@ -157,46 +162,64 @@ jobs:
           ) else (
             echo Backend log not found. > packaging\artifacts\backend.log
           )
-          if not exist packaging\artifacts\e2e_stdout.txt (
-            echo E2E did not run or failed before writing output. > packaging\artifacts\e2e_stdout.txt
-          )
           if not exist packaging\artifacts\ci_build_stdout.txt (
             echo Build step did not run or failed before writing output. > packaging\artifacts\ci_build_stdout.txt
           )
 
-      - name: Locate NSIS installer (auto-discovery)
+      - name: Collect NSIS and MSI installers (consistent names)
         if: success()
         shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          $candidates = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.exe -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\target\\' -and $_.FullName -match '\\bundle\\nsis\\' }
-          if (-not $candidates -or $candidates.Count -eq 0) {
-            Write-Error "No NSIS installer .exe found under workspace (path must contain \target\ and \bundle\nsis\). Build may have failed."
-            exit 1
-          }
-          $exe = $candidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
-          Write-Host "Chosen installer: $($exe.FullName) (LastWriteTime: $($exe.LastWriteTime))"
+          $tag = $env:TAG
+          $ver = $tag.TrimStart('v')
           $artifactsDir = Join-Path $env:GITHUB_WORKSPACE "packaging/artifacts"
           if (-not (Test-Path $artifactsDir)) { New-Item -ItemType Directory -Path $artifactsDir -Force | Out-Null }
-          $dest = Join-Path $artifactsDir "AI-Mentor-Windows-setup.exe"
-          Copy-Item -LiteralPath $exe.FullName -Destination $dest -Force
-          if (-not (Test-Path $dest) -or (Get-Item $dest).Length -eq 0) {
-            Write-Error "Copy did not produce a non-empty file at $dest"
+
+          $nsisCandidates = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.exe -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\target\\release\\bundle\\nsis\\' }
+          if (-not $nsisCandidates -or $nsisCandidates.Count -eq 0) {
+            Write-Error "No NSIS installer found under src-tauri/target/release/bundle/nsis/"
             exit 1
           }
-          Write-Host "Copied to: $dest ($((Get-Item $dest).Length) bytes)"
+          $nsisExe = $nsisCandidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+          $nsisDest = Join-Path $artifactsDir "AI-Mentor-$ver-x64-setup.exe"
+          Copy-Item -LiteralPath $nsisExe.FullName -Destination $nsisDest -Force
+          Write-Host "NSIS: $nsisDest ($((Get-Item $nsisDest).Length) bytes)"
 
-      - name: Create GitHub Release and upload assets
+          $msiCandidates = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.msi -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\target\\release\\bundle\\msi\\' }
+          if (-not $msiCandidates -or $msiCandidates.Count -eq 0) {
+            Write-Error "No MSI installer found under src-tauri/target/release/bundle/msi/"
+            exit 1
+          }
+          $msiFile = $msiCandidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+          $msiDest = Join-Path $artifactsDir "AI-Mentor-$ver-x64.msi"
+          Copy-Item -LiteralPath $msiFile.FullName -Destination $msiDest -Force
+          Write-Host "MSI: $msiDest ($((Get-Item $msiDest).Length) bytes)"
+
+      - name: Upload installers as workflow artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ github.ref_name }}
+          path: |
+            packaging/artifacts/AI-Mentor-${{ steps.version.outputs.ver }}-x64-setup.exe
+            packaging/artifacts/AI-Mentor-${{ steps.version.outputs.ver }}-x64.msi
+
+      - name: Create or update GitHub Release and upload assets
         if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           prerelease: false
+          replace_assets: true
           files: |
-            packaging/artifacts/AI-Mentor-Windows-setup.exe
+            packaging/artifacts/AI-Mentor-${{ steps.version.outputs.ver }}-x64-setup.exe
+            packaging/artifacts/AI-Mentor-${{ steps.version.outputs.ver }}-x64.msi
             packaging/artifacts/backend.log
             packaging/artifacts/ci_build_stdout.txt
-            packaging/artifacts/e2e_stdout.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,11 +19,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
-# CORS: single source of truth — Tauri + Vite dev; allow_credentials=False avoids stricter origin rules
+# CORS: single source of truth — defined here only, before any routers. OPTIONS preflight handled by CORSMiddleware.
 ALLOWED_ORIGINS = [
     "http://tauri.localhost",
-    "https://tauri.localhost",
-    "tauri://localhost",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]

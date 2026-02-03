@@ -1,12 +1,19 @@
 /**
- * Build-time info injected by Vite define (dev: build=dev, commit=unknown).
- * Formatted string: v<version>+<commit> (<build>).
+ * Build-time info for UI and logs.
+ * Version and display string come from version.ts (package.json + build channel).
+ * buildInfoFormatted is the short UI string: "vX.Y.Z · dev" | "vX.Y.Z · release".
  */
-const build: string = typeof __BUILD__ !== "undefined" ? __BUILD__ : "dev"
-const commit: string = typeof __COMMIT__ !== "undefined" ? __COMMIT__ : "unknown"
-const appVersion: string = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0"
 
-/** Single line for UI: e.g. v0.3.1+abc1234 (2025-02-01T12:00:00Z) or v0.3.1+unknown (dev) */
-export const buildInfoFormatted = `v${appVersion}+${commit} (${build})`
+import { appVersion, buildChannel, versionDisplay } from "./version";
 
-export { build, commit }
+export { appVersion, buildChannel } from "./version";
+
+/** Single line for UI (footer, about): e.g. "v0.3.9 · dev" or "v0.3.9 · release". */
+export const buildInfoFormatted = versionDisplay;
+
+/** @deprecated Use buildChannel; kept for compatibility. */
+export const build: string = buildChannel;
+
+/** Commit hash when set at build time (e.g. by inject-build-env); not shown in UI. */
+export const commit: string =
+  typeof __COMMIT__ !== "undefined" ? __COMMIT__ : "";

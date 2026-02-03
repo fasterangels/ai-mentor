@@ -14,6 +14,10 @@ export interface AppShellProps {
   pageTitle: string;
   /** Status text in top bar (e.g. "Ready", "Online"). */
   statusLabel?: string;
+  /** Whether the top bar should show the search field. */
+  showSearchInTopbar?: boolean;
+  /** Whether the top bar should show the status indicator. */
+  showStatusInTopbar?: boolean;
   /** Main content area. */
   children: React.ReactNode;
 }
@@ -23,13 +27,20 @@ export default function AppShell({
   onSidebarSelect,
   pageTitle,
   statusLabel = "Ready",
+  showSearchInTopbar = true,
+  showStatusInTopbar = true,
   children,
 }: AppShellProps) {
   return (
     <div className="ai-shell">
       <Sidebar activeKey={activeKey} onSelect={onSidebarSelect} />
       <div className="ai-shell-main">
-        <Topbar pageTitle={pageTitle} statusLabel={statusLabel} />
+        <Topbar
+          pageTitle={pageTitle}
+          statusLabel={statusLabel}
+          showSearch={showSearchInTopbar}
+          showStatus={showStatusInTopbar}
+        />
         <main className="ai-shell-content" role="main">
           {children}
         </main>

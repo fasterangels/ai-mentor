@@ -5,6 +5,7 @@
   "identifier": "com.ai.mentor.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "node scripts/inject-build-env.js",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../dist"
   },

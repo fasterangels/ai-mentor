@@ -26,7 +26,8 @@ const build =
   new Date().toISOString();
 
 process.env.VITE_COMMIT = commit;
-process.env.VITE_BUILD = String(build);
+process.env.VITE_BUILD = "release";
+process.env.VITE_BUILD_ID = String(build);
 
 const result = spawnSync("npm", ["run", "build"], {
   cwd: root,
