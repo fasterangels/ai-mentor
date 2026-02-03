@@ -51,51 +51,83 @@ jobs:
         working-directory: app/frontend
         run: npm ci
 
-      - name: Build backend exe and copy to Tauri bin
+      - name: Build backend exe
         run: |
           if not exist packaging\artifacts mkdir packaging\artifacts
           python -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
           if not exist app\frontend\src-tauri\bin mkdir app\frontend\src-tauri\bin
-          copy /Y dist\ai-mentor-backend.exe app\frontend\src-tauri\bin\ai-mentor-backend-x86_64-pc-windows-msvc.exe
-          copy /Y dist\ai-mentor-backend.exe app\frontend\src-tauri\bin\ai-mentor-backend.exe
-          copy /Y packaging\windows_task\launch_backend.cmd app\frontend\src-tauri\bin\launch_backend.cmd
 
-      - name: Verify backend exe is x64 (fail fast)
+      - name: Copy backend exe to Tauri bin
+        shell: pwsh
+        run: |
+          $src = Join-Path $env:GITHUB_WORKSPACE "dist\ai-mentor-backend.exe"
+          $bin = Join-Path $env:GITHUB_WORKSPACE "app\frontend\src-tauri\bin"
+          if (!(Test-Path $src)) { throw "PyInstaller output missing: $src" }
+          Copy-Item -Path $src -Destination (Join-Path $bin "ai-mentor-backend-x86_64-pc-windows-msvc.exe") -Force
+          Copy-Item -Path $src -Destination (Join-Path $bin "ai-mentor-backend.exe") -Force
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "packaging\windows_task\launch_backend.cmd") -Destination (Join-Path $bin "launch_backend.cmd") -Force
+
+      - name: Inspect backend exe (size + hash)
+        shell: pwsh
+        run: |
+          $exe = "app/frontend/src-tauri/bin/ai-mentor-backend.exe"
+          Get-Item $exe | Format-List FullName,Length,LastWriteTimeUtc
+          Get-FileHash $exe -Algorithm SHA256
+
+      - name: Verify backend exe is valid PE and x64 (fail fast)
         shell: pwsh
         run: |
           $exe = "app/frontend/src-tauri/bin/ai-mentor-backend.exe"
           if (!(Test-Path $exe)) { throw "Missing backend exe at $exe" }
 
 
-          # Read PE header machine type
+          $len = (Get-Item $exe).Length
+          Write-Host "Backend exe size: $len bytes"
+          if ($len -lt 102400) { throw "Backend exe is too small (<100KB). Copy/build produced a truncated or wrong file." }
+
+
           $fs = [System.IO.File]::OpenRead($exe)
           $br = New-Object System.IO.BinaryReader($fs)
           try {
+            # Check MZ header
+            $fs.Seek(0, 'Begin') | Out-Null
+            $mz1 = $br.ReadByte()
+            $mz2 = $br.ReadByte()
+            if ($mz1 -ne 0x4D -or $mz2 -ne 0x5A) { throw "Not a Windows EXE (missing 'MZ' header)." }
+
+
+            # Read PE header offset (e_lfanew)
             $fs.Seek(0x3C, 'Begin') | Out-Null
             $peOffset = $br.ReadInt32()
+            if ($peOffset -lt 0 -or $peOffset -gt ($len - 256)) { throw "Invalid PE header offset: $peOffset (file likely corrupted/truncated)." }
+
+
+            # Check PE signature 'PE\0\0'
+            $fs.Seek($peOffset, 'Begin') | Out-Null
+            $p1 = $br.ReadByte(); $p2 = $br.ReadByte(); $p3 = $br.ReadByte(); $p4 = $br.ReadByte()
+            if ($p1 -ne 0x50 -or $p2 -ne 0x45 -or $p3 -ne 0x00 -or $p4 -ne 0x00) {
+              throw "Missing PE signature at offset $peOffset (file likely corrupted/truncated)."
+            }
+
+
+            # Machine field at PE header + 4
             $fs.Seek($peOffset + 4, 'Begin') | Out-Null
             $machine = $br.ReadUInt16()
-          } finally {
+            Write-Host ("Backend PE machine: 0x{0:X4}" -f $machine)
+
+
+            # 0x8664 = AMD64 (x64), 0x014c = I386 (x86)
+            if ($machine -ne 0x8664) {
+              throw ("Backend exe is NOT x64 (expected 0x8664). Got 0x{0:X4}." -f $machine)
+            }
+
+
+            Write-Host "OK: backend exe is valid PE and x64."
+          }
+          finally {
             $br.Close()
             $fs.Close()
           }
-
-
-          # 0x8664 = AMD64 (x64), 0x014c = I386 (x86)
-          Write-Host ("Backend PE machine: 0x{0:X4}" -f $machine)
-
-
-          if ($machine -ne 0x8664) {
-            throw "Backend exe is NOT x64 (expected 0x8664). Got 0x{0:X4}. Fix the backend build/copy source." -f $machine
-          }
-
-
-          Write-Host "OK: backend exe is x64."
-
-      - name: Hash backend exe
-        shell: pwsh
-        run: |
-          Get-FileHash "app/frontend/src-tauri/bin/ai-mentor-backend.exe" -Algorithm SHA256
 
       - name: Build frontend
         working-directory: app/frontend
