@@ -71,10 +71,11 @@ jobs:
         shell: pwsh
         run: |
           $exe = "app/frontend/src-tauri/bin/ai-mentor-backend.exe"
+          if (!(Test-Path $exe)) { throw "Missing backend exe at $exe" }
           Get-Item $exe | Format-List FullName,Length,LastWriteTimeUtc
           Get-FileHash $exe -Algorithm SHA256
 
-      - name: Verify backend exe is valid PE and x64 (fail fast)
+      - name: Επαληθεύστε ότι το backend exe είναι x64 (γρήγορη αποτυχία)
         shell: pwsh
         run: |
           $exe = "app/frontend/src-tauri/bin/ai-mentor-backend.exe"
@@ -83,50 +84,36 @@ jobs:
 
           $len = (Get-Item $exe).Length
           Write-Host "Backend exe size: $len bytes"
-          if ($len -lt 102400) { throw "Backend exe is too small (<100KB). Copy/build produced a truncated or wrong file." }
+          if ($len -lt 102400) { throw "Backend exe is too small (<100KB). Truncated or wrong file was copied." }
 
 
           $fs = [System.IO.File]::OpenRead($exe)
           $br = New-Object System.IO.BinaryReader($fs)
           try {
-            # Check MZ header
             $fs.Seek(0, 'Begin') | Out-Null
-            $mz1 = $br.ReadByte()
-            $mz2 = $br.ReadByte()
-            if ($mz1 -ne 0x4D -or $mz2 -ne 0x5A) { throw "Not a Windows EXE (missing 'MZ' header)." }
+            $mz1 = $br.ReadByte(); $mz2 = $br.ReadByte()
+            if ($mz1 -ne 0x4D -or $mz2 -ne 0x5A) { throw "Not a Windows EXE (missing MZ header)." }
 
 
-            # Read PE header offset (e_lfanew)
             $fs.Seek(0x3C, 'Begin') | Out-Null
             $peOffset = $br.ReadInt32()
-            if ($peOffset -lt 0 -or $peOffset -gt ($len - 256)) { throw "Invalid PE header offset: $peOffset (file likely corrupted/truncated)." }
+            if ($peOffset -lt 0 -or $peOffset -gt ($len - 256)) { throw "Invalid PE header offset: $peOffset (corrupted/truncated file)." }
 
 
-            # Check PE signature 'PE\0\0'
             $fs.Seek($peOffset, 'Begin') | Out-Null
             $p1 = $br.ReadByte(); $p2 = $br.ReadByte(); $p3 = $br.ReadByte(); $p4 = $br.ReadByte()
-            if ($p1 -ne 0x50 -or $p2 -ne 0x45 -or $p3 -ne 0x00 -or $p4 -ne 0x00) {
-              throw "Missing PE signature at offset $peOffset (file likely corrupted/truncated)."
-            }
+            if ($p1 -ne 0x50 -or $p2 -ne 0x45 -or $p3 -ne 0x00 -or $p4 -ne 0x00) { throw "Missing PE signature at offset $peOffset (corrupted/truncated file)." }
 
 
-            # Machine field at PE header + 4
             $fs.Seek($peOffset + 4, 'Begin') | Out-Null
             $machine = $br.ReadUInt16()
             Write-Host ("Backend PE machine: 0x{0:X4}" -f $machine)
-
-
-            # 0x8664 = AMD64 (x64), 0x014c = I386 (x86)
-            if ($machine -ne 0x8664) {
-              throw ("Backend exe is NOT x64 (expected 0x8664). Got 0x{0:X4}." -f $machine)
-            }
+            if ($machine -ne 0x8664) { throw ("Backend exe is NOT x64. Expected 0x8664, got 0x{0:X4}." -f $machine) }
 
 
             Write-Host "OK: backend exe is valid PE and x64."
-          }
-          finally {
-            $br.Close()
-            $fs.Close()
+          } finally {
+            $br.Close(); $fs.Close()
           }
 
       - name: Build frontend
