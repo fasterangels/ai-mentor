@@ -4,19 +4,19 @@
 import { el } from "./el";
 import { en } from "./en";
 
-export type Lang = "el" | "en";
+type Lang = "el" | "en";
 
 let lang: Lang = "el";
 
-export function setLang(next: Lang): void {
+function setLang(next: Lang): void {
   lang = next;
 }
 
-export function getLang(): Lang {
+function getLang(): Lang {
   return lang;
 }
 
-export function t(key: string): string {
+function t(key: string): string {
   const dict = lang === "el" ? el : en;
   return dict[key] ?? en[key] ?? key;
 }
@@ -47,12 +47,12 @@ const DECISION_KIND_MAP: Record<string, string> = {
   UNKNOWN: "—",
 };
 
-export function labelResolverStatus(code: string): string {
+function labelResolverStatus(code: string): string {
   const key = (code ?? "").trim().toUpperCase() || "UNKNOWN";
   return RESOLVER_MAP[key] ?? t(`enum.resolver.${key}`) ?? code;
 }
 
-export function labelAnalyzerOutcome(code: string): string {
+function labelAnalyzerOutcome(code: string): string {
   const key = (code ?? "").trim().toUpperCase() || "UNKNOWN";
   if (ANALYZER_OUTCOME_MAP[key]) return ANALYZER_OUTCOME_MAP[key];
   if (/^PREDICTION_AVAILABLE|^OK$/i.test(key)) return ANALYZER_OUTCOME_MAP.PREDICTION_AVAILABLE;
@@ -60,12 +60,12 @@ export function labelAnalyzerOutcome(code: string): string {
   return ANALYZER_OUTCOME_MAP.UNKNOWN;
 }
 
-export function labelDecisionKind(code: string): string {
+function labelDecisionKind(code: string): string {
   const key = (code ?? "").trim().toUpperCase() || "UNKNOWN";
   return DECISION_KIND_MAP[key] ?? (key.length > 0 ? "Παίζεται" : "—");
 }
 
-export function labelMarket(code: string): string {
+function labelMarket(code: string): string {
   const key = (code ?? "").trim();
   if (!key) return "—";
   // Common market codes → Greek labels (optional)
@@ -82,4 +82,13 @@ function labelNoteOrWarning(kind?: string): string {
   return t("label.note");
 }
 
-export { labelNoteOrWarning };
+export {
+  t,
+  setLang,
+  getLang,
+  labelResolverStatus,
+  labelAnalyzerOutcome,
+  labelDecisionKind,
+  labelMarket,
+  labelNoteOrWarning,
+};
