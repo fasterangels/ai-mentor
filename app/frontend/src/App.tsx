@@ -16,7 +16,7 @@ import AppShell from "./ui/shell/AppShell";
 import HomeScreen from "./ui/home/HomeScreen";
 import { buildAnalysisPdf, buildResultSummaryPdf } from "./utils/buildAnalysisPdf";
 import type { ResultVM } from "./ui/result/types";
-import { t, labelResolverStatus, labelDecisionKind, labelNoteOrWarning } from "./i18n";
+import { t, labelResolverStatus, labelDecisionKind } from "./i18n";
 import { buildInfoFormatted } from "./buildInfo";
 
 /** Navigation view (no router). */
@@ -510,7 +510,7 @@ function buildReportHtml(params: {
 
   html += `<h2>${esc(t("section.resolver"))}</h2>`;
   html += `<p>${esc(t("label.status"))}: ${esc(result?.resolver?.status ?? "—")} · ${esc(t("label.match_id"))}: ${esc(String(result?.match_id ?? result?.resolver?.match_id ?? "—"))}</p>`;
-  html += notes.length ? "<ul>" + notes.slice(0, 12).map((n) => "<li>" + esc(labelNoteOrWarning(String(n ?? "")) || String(n ?? "")) + "</li>").join("") + "</ul>" : "<p>—</p>";
+  html += notes.length ? "<ul>" + notes.slice(0, 12).map((n) => "<li>" + esc((String(n ?? "") === "WARNING" ? t("label.warning") : t("label.note")) || String(n ?? "")) + "</li>").join("") + "</ul>" : "<p>—</p>";
   html += `<p>${esc(t("report.candidates"))}: ${candidates.length}</p>`;
 
   html += `<h2>${esc(t("summary.outcome"))}</h2>`;
