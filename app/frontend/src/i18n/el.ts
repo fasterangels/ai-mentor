@@ -113,6 +113,8 @@ export const el: Record<string, string> = {
   "analysis.backend_starting": "Ο backend ξεκινά…",
   "backend.not_ready_message": "Ο backend δεν ξεκίνησε αυτόματα. Ξεκίνησέ τον χειροκίνητα ή επανεγκατάστησε. (Άνοιγμα λογών)",
   "backend.retry": "Επανάληψη εκκίνησης backend",
+  "backend.port_in_use_message": "Η θύρα 8000 είναι πιασμένη αλλά ο backend δεν απαντά. Πάτα 'Kill & Retry'.",
+  "backend.kill_and_retry": "Kill & Retry",
   "backend.open_logs": "Άνοιγμα λογών",
   "backend.status_ready": "Έτοιμο",
   "backend.status_starting": "Ξεκινά…",

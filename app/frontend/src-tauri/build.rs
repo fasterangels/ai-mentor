@@ -1,5 +1,7 @@
 fn main() {
-    let build_id = std::env::var("VITE_BUILD_ID").unwrap_or_else(|_| "UNKNOWN_BUILD".to_string());
+    let build_id = std::env::var("VITE_BUILD_ID")
+        .or_else(|_| std::env::var("VITE_BUILD"))
+        .unwrap_or_else(|_| "UNKNOWN_BUILD".to_string());
     println!("cargo:rustc-env=BUILD_ID={}", build_id);
     tauri_build::build()
 }

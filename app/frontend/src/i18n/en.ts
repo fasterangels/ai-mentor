@@ -113,6 +113,8 @@ export const en: Record<string, string> = {
   "analysis.backend_starting": "Backend starting…",
   "backend.not_ready_message": "Backend didn't start automatically. Start it manually or reinstall. (Open logs)",
   "backend.retry": "Retry backend start",
+  "backend.port_in_use_message": "Port 8000 is in use but the backend is not responding. Press 'Kill & Retry'.",
+  "backend.kill_and_retry": "Kill & Retry",
   "backend.open_logs": "Open logs",
   "backend.status_ready": "Ready",
   "backend.status_starting": "Starting…",

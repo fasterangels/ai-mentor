@@ -2,6 +2,7 @@
 // API base is fixed: http://127.0.0.1:8000
 
 use std::fs;
+use std::net::TcpListener;
 use tauri::Manager;
 use std::io::Write;
 use std::path::PathBuf;
@@ -14,10 +15,12 @@ use std::os::windows::process::CommandExt;
 const LOCK_FILE_NAME: &str = "app.lock";
 const APP_LOG_NAME: &str = "app.log";
 const BACKEND_AUTOSTART_LOG_NAME: &str = "backend_autostart.log";
+const BACKEND_CHILD_LOG_NAME: &str = "backend_child.log";
 const FIXED_API_BASE: &str = "http://127.0.0.1:8000";
 const HEALTH_URL: &str = "http://127.0.0.1:8000/health";
 const HEALTH_POLL_MS: u64 = 250;
 const HEALTH_TIMEOUT_MS: u64 = 10_000;
+const NOT_READY_REASON_PORT_IN_USE: &str = "PORT_IN_USE_NO_HEALTH";
 
 /// Windows CREATE_NO_WINDOW to avoid black console.
 #[cfg(windows)]
@@ -43,6 +46,10 @@ fn app_log_path() -> PathBuf {
 
 fn backend_autostart_log_path() -> PathBuf {
   logs_dir().join(BACKEND_AUTOSTART_LOG_NAME)
+}
+
+fn backend_child_log_path() -> PathBuf {
+  logs_dir().join(BACKEND_CHILD_LOG_NAME)
 }
 
 fn app_log(msg: &str) {
@@ -104,22 +111,30 @@ fn remove_lock() {
   let _ = fs::remove_file(lock_file_path());
 }
 
-/// Only auto-start backend in release build and when env AI_MENTOR_AUTOSTART_BACKEND != "0".
-/// Set AI_MENTOR_AUTOSTART_BACKEND=0 to disable (default ON for release).
+/// Only auto-start backend on Windows, release build, and when env AI_MENTOR_AUTOSTART_BACKEND != "0".
+/// Set AI_MENTOR_AUTOSTART_BACKEND=0 to disable (default ON for Windows release).
+/// Dev mode and non-Windows are unchanged (no autostart).
 fn autostart_enabled() -> bool {
-  if cfg!(debug_assertions) {
-    return false;
-  }
-  match std::env::var("AI_MENTOR_AUTOSTART_BACKEND") {
-    Ok(v) => v != "0",
-    Err(_) => true,
+  #[cfg(not(target_os = "windows"))]
+  return false;
+  #[cfg(target_os = "windows")]
+  {
+    if cfg!(debug_assertions) {
+      return false;
+    }
+    match std::env::var("AI_MENTOR_AUTOSTART_BACKEND") {
+      Ok(v) => v != "0",
+      Err(_) => true,
+    }
   }
 }
 
 /// Backend process state: READY | STARTING | NOT_READY.
+/// When NOT_READY, not_ready_reason may be set (e.g. PORT_IN_USE_NO_HEALTH).
 struct BackendStateInner {
   status: String,
   child: Option<std::process::Child>,
+  not_ready_reason: Option<String>,
 }
 
 struct BackendState {
@@ -132,9 +147,38 @@ impl Default for BackendState {
       inner: Mutex::new(BackendStateInner {
         status: "NOT_READY".to_string(),
         child: None,
+        not_ready_reason: None,
       }),
     }
   }
+}
+
+/// Returns true if GET health returns 200 and body contains {"status":"ok"} (or "ok").
+fn probe_health_ok() -> bool {
+  let client = match reqwest::blocking::Client::builder()
+    .timeout(Duration::from_secs(2))
+    .build()
+  {
+    Ok(c) => c,
+    Err(_) => return false,
+  };
+  let res = match client.get(HEALTH_URL).send() {
+    Ok(r) => r,
+    Err(_) => return false,
+  };
+  if !res.status().is_success() {
+    return false;
+  }
+  let body = match res.text() {
+    Ok(b) => b,
+    Err(_) => return false,
+  };
+  body.contains("\"status\":\"ok\"") || body.contains("\"status\": \"ok\"") || body.contains("ok")
+}
+
+/// Returns true if port 8000 is in use (bind fails).
+fn port_8000_in_use() -> bool {
+  TcpListener::bind("127.0.0.1:8000").is_err()
 }
 
 fn open_append_log(path: &PathBuf) -> Option<std::fs::File> {
@@ -148,24 +192,27 @@ fn open_append_log(path: &PathBuf) -> Option<std::fs::File> {
     .ok()
 }
 
-fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, log_path: PathBuf) {
+/// Child stdout/stderr go to child_log_path; lifecycle messages go to backend_autostart.log only.
+fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, child_log_path: PathBuf) {
   backend_autostart_log("autostart: begin");
-  let stdout_file = match open_append_log(&log_path) {
+  let stdout_file = match open_append_log(&child_log_path) {
     Some(f) => f,
     None => {
-      backend_autostart_log("autostart: failed to open log file");
+      backend_autostart_log("autostart: failed to open child log file");
       if let Ok(mut g) = state.inner.lock() {
         g.status = "NOT_READY".to_string();
+        g.not_ready_reason = None;
       }
       return;
     }
   };
-  let stderr_file = match open_append_log(&log_path) {
+  let stderr_file = match open_append_log(&child_log_path) {
     Some(f) => f,
     None => {
-      backend_autostart_log("autostart: failed to open log file (stderr)");
+      backend_autostart_log("autostart: failed to open child log file (stderr)");
       if let Ok(mut g) = state.inner.lock() {
         g.status = "NOT_READY".to_string();
+        g.not_ready_reason = None;
       }
       return;
     }
@@ -186,6 +233,7 @@ fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, 
       backend_autostart_log(&format!("autostart: spawn failed: {}", e));
       if let Ok(mut g) = state.inner.lock() {
         g.status = "NOT_READY".to_string();
+        g.not_ready_reason = None;
       }
       return;
     }
@@ -194,6 +242,7 @@ fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, 
   {
     let mut g = state.inner.lock().unwrap();
     g.status = "STARTING".to_string();
+    g.not_ready_reason = None;
     g.child = Some(child);
   }
 
@@ -209,6 +258,7 @@ fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, 
         backend_autostart_log("autostart: health OK");
         if let Ok(mut g) = state.inner.lock() {
           g.status = "READY".to_string();
+          g.not_ready_reason = None;
         }
         app_log("backend autostart: READY");
         return;
@@ -220,9 +270,37 @@ fn try_spawn_and_health(state: std::sync::Arc<BackendState>, exe_path: PathBuf, 
   backend_autostart_log("autostart: health timeout");
   if let Ok(mut g) = state.inner.lock() {
     g.status = "NOT_READY".to_string();
+    g.not_ready_reason = None;
     g.child.take();
   }
   app_log("backend autostart: NOT_READY (timeout)");
+}
+
+/// 1) Probe health -> if OK set READY and return. 2) If port 8000 in use set NOT_READY reason PORT_IN_USE_NO_HEALTH. 3) Else spawn + health wait.
+fn run_autostart_flow(state: std::sync::Arc<BackendState>, exe_path: PathBuf) {
+  backend_autostart_log("autostart: probing health");
+  if probe_health_ok() {
+    backend_autostart_log("autostart: already healthy, skipping spawn");
+    if let Ok(mut g) = state.inner.lock() {
+      g.status = "READY".to_string();
+      g.not_ready_reason = None;
+    }
+    app_log("backend autostart: READY (already running)");
+    return;
+  }
+
+  if port_8000_in_use() {
+    backend_autostart_log("autostart: port 8000 in use but health failed -> NOT_READY");
+    if let Ok(mut g) = state.inner.lock() {
+      g.status = "NOT_READY".to_string();
+      g.not_ready_reason = Some(NOT_READY_REASON_PORT_IN_USE.to_string());
+    }
+    app_log("backend autostart: NOT_READY (PORT_IN_USE_NO_HEALTH)");
+    return;
+  }
+
+  let child_log = backend_child_log_path();
+  try_spawn_and_health(state, exe_path, child_log);
 }
 
 #[tauri::command]
@@ -244,6 +322,11 @@ fn is_backend_ready(state: tauri::State<std::sync::Arc<BackendState>>) -> bool {
 #[tauri::command]
 fn get_backend_status(state: tauri::State<std::sync::Arc<BackendState>>) -> String {
   let g = state.inner.lock().unwrap();
+  if g.status == "NOT_READY" {
+    if let Some(ref r) = g.not_ready_reason {
+      return format!("NOT_READY:{}", r);
+    }
+  }
   g.status.clone()
 }
 
@@ -254,17 +337,18 @@ fn retry_backend_start(app: tauri::AppHandle, state: tauri::State<std::sync::Arc
     .path()
     .resolve("bin/ai-mentor-backend.exe", tauri::path::BaseDirectory::Resource)
     .map_err(|e| format!("{:?}", e))?;
-  let log_path = backend_autostart_log_path();
 
   let mut g = state.inner.lock().map_err(|e| e.to_string())?;
   if let Some(mut child) = g.child.take() {
     let _ = child.kill();
-    g.status = "NOT_READY".to_string();
   }
+  g.status = "NOT_READY".to_string();
+  g.not_ready_reason = None;
   drop(g);
 
   let state_clone = state.inner().clone();
-  std::thread::spawn(move || try_spawn_and_health(state_clone, exe_path, log_path));
+  let child_log = backend_child_log_path();
+  std::thread::spawn(move || try_spawn_and_health(state_clone, exe_path, child_log));
   Ok(())
 }
 
@@ -286,6 +370,34 @@ fn run_backend_task() -> Result<(), String> {
 #[tauri::command]
 fn get_backend_autostart_log_path() -> PathBuf {
   backend_autostart_log_path()
+}
+
+/// Kill any ai-mentor-backend.exe processes (Windows), then spawn + health wait again.
+#[tauri::command]
+fn kill_backend_and_retry(app: tauri::AppHandle, state: tauri::State<std::sync::Arc<BackendState>>) -> Result<(), String> {
+  #[cfg(target_os = "windows")]
+  {
+    let _ = std::process::Command::new("taskkill")
+      .args(["/F", "/IM", "ai-mentor-backend.exe"])
+      .output();
+  }
+
+  let mut g = state.inner.lock().map_err(|e| e.to_string())?;
+  if let Some(mut child) = g.child.take() {
+    let _ = child.kill();
+  }
+  g.status = "NOT_READY".to_string();
+  g.not_ready_reason = None;
+  drop(g);
+
+  let exe_path = app
+    .path()
+    .resolve("bin/ai-mentor-backend.exe", tauri::path::BaseDirectory::Resource)
+    .map_err(|e| format!("{:?}", e))?;
+
+  let state_clone = state.inner().clone();
+  std::thread::spawn(move || run_autostart_flow(state_clone, exe_path));
+  Ok(())
 }
 
 /// Open the logs folder in the system file manager (e.g. Explorer on Windows).
@@ -341,8 +453,7 @@ pub fn run() {
           .resolve("bin/ai-mentor-backend.exe", tauri::path::BaseDirectory::Resource)
           .ok();
         if let Some(path) = exe_path {
-          let log_path = backend_autostart_log_path();
-          std::thread::spawn(move || try_spawn_and_health(state, path, log_path));
+          std::thread::spawn(move || run_autostart_flow(state, path));
         } else {
           app_log("backend autostart: exe not found (resource), NOT_READY");
           if let Some(s) = app.try_state::<std::sync::Arc<BackendState>>() {
@@ -361,6 +472,7 @@ pub fn run() {
       is_backend_ready,
       get_backend_status,
       retry_backend_start,
+      kill_backend_and_retry,
       run_backend_task,
       get_backend_autostart_log_path,
       open_logs_folder,

@@ -598,7 +598,7 @@ function App() {
   const [toast, setToast] = useState<{ id: string; kind: "success" | "warn" | "error"; message: string } | null>(null);
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
-  const [backendStatus, setBackendStatus] = useState<"READY" | "STARTING" | "NOT_READY" | null>(null);
+  const [backendStatus, setBackendStatus] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string>("—");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bundleFileInputRef = useRef<HTMLInputElement>(null);
@@ -660,7 +660,7 @@ function App() {
       import("@tauri-apps/api/core")
         .then(({ invoke }) => invoke<string>("get_backend_status"))
         .then((s) => {
-          if (!cancelled && (s === "READY" || s === "STARTING" || s === "NOT_READY")) setBackendStatus(s);
+          if (!cancelled && (s === "READY" || s === "STARTING" || s.startsWith("NOT_READY"))) setBackendStatus(s);
         })
         .catch(() => {});
     };
@@ -1618,7 +1618,7 @@ function App() {
         }}
         pageTitle={viewToPageTitle(view)}
         statusLabel={
-          isTauri() && backendStatus === "NOT_READY"
+          isTauri() && backendStatus?.startsWith("NOT_READY")
             ? t("backend.status_not_ready")
             : backendReady
               ? t("topbar.status_ready")
@@ -1721,18 +1721,21 @@ function App() {
         {view === "NEW_PREDICTION" && (
       <div className="ai-container">
         <h1 className="ai-cardHeader" style={{ marginBottom: 8 }}>{t("analysis.title")}</h1>
-        {isTauri() && backendStatus === "NOT_READY" && (
+        {isTauri() && backendStatus?.startsWith("NOT_READY") && (
           <div className="ai-card ai-card--error" style={{ marginBottom: 12 }} role="alert">
-            <p style={{ margin: 0 }}>{t("backend.not_ready_message")}</p>
+            <p style={{ margin: 0 }}>
+              {backendStatus?.includes("PORT_IN_USE_NO_HEALTH") ? t("backend.port_in_use_message") : t("backend.not_ready_message")}
+            </p>
             <div className="ai-row ai-row--gap2" style={{ marginTop: 8, flexWrap: "wrap" }}>
               <button
                 type="button"
                 className="ai-btn ai-btn--primary"
                 onClick={() => {
-                  import("@tauri-apps/api/core").then(({ invoke }) => invoke("retry_backend_start").catch(() => {}));
+                  const cmd = backendStatus?.includes("PORT_IN_USE_NO_HEALTH") ? "kill_backend_and_retry" : "retry_backend_start";
+                  import("@tauri-apps/api/core").then(({ invoke }) => invoke(cmd).catch(() => {}));
                 }}
               >
-                {t("backend.retry")}
+                {backendStatus?.includes("PORT_IN_USE_NO_HEALTH") ? t("backend.kill_and_retry") : t("backend.retry")}
               </button>
               <button
                 type="button"
@@ -1746,7 +1749,7 @@ function App() {
             </div>
           </div>
         )}
-        {!backendReady && backendStatus !== "NOT_READY" && (
+        {!backendReady && !backendStatus?.startsWith("NOT_READY") && (
           <div className="ai-card ai-card--warning" style={{ marginBottom: 12 }} role="status">
             <p style={{ margin: 0 }}>{t("analysis.backend_starting")}</p>
           </div>
