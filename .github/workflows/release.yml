@@ -60,6 +60,43 @@ jobs:
           copy /Y dist\ai-mentor-backend.exe app\frontend\src-tauri\bin\ai-mentor-backend.exe
           copy /Y packaging\windows_task\launch_backend.cmd app\frontend\src-tauri\bin\launch_backend.cmd
 
+      - name: Verify backend exe is x64 (fail fast)
+        shell: pwsh
+        run: |
+          $exe = "app/frontend/src-tauri/bin/ai-mentor-backend.exe"
+          if (!(Test-Path $exe)) { throw "Missing backend exe at $exe" }
+
+
+          # Read PE header machine type
+          $fs = [System.IO.File]::OpenRead($exe)
+          $br = New-Object System.IO.BinaryReader($fs)
+          try {
+            $fs.Seek(0x3C, 'Begin') | Out-Null
+            $peOffset = $br.ReadInt32()
+            $fs.Seek($peOffset + 4, 'Begin') | Out-Null
+            $machine = $br.ReadUInt16()
+          } finally {
+            $br.Close()
+            $fs.Close()
+          }
+
+
+          # 0x8664 = AMD64 (x64), 0x014c = I386 (x86)
+          Write-Host ("Backend PE machine: 0x{0:X4}" -f $machine)
+
+
+          if ($machine -ne 0x8664) {
+            throw "Backend exe is NOT x64 (expected 0x8664). Got 0x{0:X4}. Fix the backend build/copy source." -f $machine
+          }
+
+
+          Write-Host "OK: backend exe is x64."
+
+      - name: Hash backend exe
+        shell: pwsh
+        run: |
+          Get-FileHash "app/frontend/src-tauri/bin/ai-mentor-backend.exe" -Algorithm SHA256
+
       - name: Build frontend
         working-directory: app/frontend
         run: npm run build
