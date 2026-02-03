@@ -30,6 +30,7 @@ class OddsSnapshot(BaseModel):
     odds: float = Field(..., gt=0, description="Decimal odds")
     source: str = Field(..., description="Source identifier")
     collected_at_utc: datetime = Field(..., description="When the quote was collected (UTC)")
+    checksum: Optional[str] = Field(None, description="SHA-256 of stable fields (set by ingestion)")
 
 
 class MatchState(BaseModel):
@@ -42,8 +43,11 @@ class MatchState(BaseModel):
 
 
 class IngestedMatchData(BaseModel):
-    """Full normalized payload for one match: identity, odds snapshots, and optional state."""
+    """Full normalized payload for one match: identity, odds snapshots, optional state, and provenance."""
 
     identity: MatchIdentity = Field(..., description="Match identity")
     odds: List[OddsSnapshot] = Field(default_factory=list, description="Odds snapshots")
     state: Optional[MatchState] = Field(None, description="Current or final match state (optional)")
+    source: Optional[str] = Field(None, description="Connector name (set by ingestion)")
+    collected_at_utc: Optional[datetime] = Field(None, description="When payload was collected (UTC)")
+    checksum: Optional[str] = Field(None, description="SHA-256 of identity + odds checksums + state")

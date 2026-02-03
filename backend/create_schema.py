@@ -4,6 +4,7 @@ from core.config import get_settings
 from core.database import init_database, dispose_database, get_database_manager
 from models.base import Base
 import models
+import ingestion.cache_models  # noqa: F401 — register ingested_match_cache table
 
 
 async def main():
