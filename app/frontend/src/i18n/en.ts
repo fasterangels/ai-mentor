@@ -152,6 +152,8 @@ export const en: Record<string, string> = {
   "csv_comma": ", (comma)",
   "label.warnings": "Warnings",
   "label.notes": "Notes",
+  "label.warning": "Warning",
+  "label.note": "Note",
   "toast.dismiss": "Dismiss",
   "import.imported_prefix": "Imported",
   "import.snapshots": "snapshots",

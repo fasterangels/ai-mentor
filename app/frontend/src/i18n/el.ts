@@ -152,6 +152,8 @@ export const el: Record<string, string> = {
   "csv_comma": ", (κόμμα)",
   "label.warnings": "Προειδοποιήσεις",
   "label.notes": "Σημειώσεις",
+  "label.warning": "Προειδοποίηση",
+  "label.note": "Σημείωση",
   "toast.dismiss": "Απόρριψη",
   "import.imported_prefix": "Εισήχθησαν",
   "import.snapshots": "snapshots",
