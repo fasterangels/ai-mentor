@@ -76,3 +76,19 @@ export function labelMarket(code: string): string {
   };
   return MARKET_MAP[key] ?? key;
 }
+
+/** Human-readable labels for backend note/warning/flag codes (e.g. NO_KICKOFF_HINT_USING_BOUNDED_WINDOW). */
+const NOTE_WARNING_MAP: Record<string, string> = {
+  NO_KICKOFF_HINT_USING_BOUNDED_WINDOW: "Δεν υπάρχει ακριβής ώρα έναρξης· χρησιμοποιείται εκτιμώμενο χρονικό παράθυρο.",
+  NO_KICKOFF_HINT: "Δεν υπάρχει ακριβής ώρα έναρξης.",
+  BOUNDED_WINDOW: "Εκτιμώμενο χρονικό παράθυρο.",
+};
+
+export function labelNoteOrWarning(code: string): string {
+  const key = (code ?? "").trim();
+  if (!key) return "";
+  const upper = key.toUpperCase().replace(/-/g, "_");
+  if (NOTE_WARNING_MAP[upper]) return NOTE_WARNING_MAP[upper];
+  if (/NO_KICKOFF_HINT.*BOUNDED|BOUNDED.*WINDOW/i.test(upper)) return NOTE_WARNING_MAP.NO_KICKOFF_HINT_USING_BOUNDED_WINDOW;
+  return t(`hint.${upper}`) !== `hint.${upper}` ? t(`hint.${upper}`) : key;
+}
