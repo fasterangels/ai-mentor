@@ -19,6 +19,7 @@ from .raw_payload_repo import RawPayloadRepository
 from .analysis_run_repo import AnalysisRunRepository
 from .prediction_repo import PredictionRepository
 from .prediction_outcome_repo import PredictionOutcomeRepository
+from .snapshot_resolution_repo import SnapshotResolutionRepository
 
 __all__ = [
     "BaseRepository",
@@ -33,4 +34,5 @@ __all__ = [
     "AnalysisRunRepository",
     "PredictionRepository",
     "PredictionOutcomeRepository",
+    "SnapshotResolutionRepository",
 ]
