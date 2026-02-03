@@ -1,4 +1,4 @@
-"""GET /api/v1/policy/active and POST /api/v1/policy/tune/shadow (read-only; no apply)."""
+"""GET /api/v1/policy/active, POST /api/v1/policy/tune/shadow, POST /api/v1/policy/audit (read-only; no apply)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from policy.policy_model import Policy
 from policy.policy_runtime import get_active_policy
 from policy.policy_store import default_policy_path
 from policy.tuner import run_tuner, PolicyProposal
 from policy.replay import run_replay
+from policy.audit import audit_snapshots
 
 router = APIRouter(prefix="/policy", tags=["policy"])
 
@@ -81,3 +83,44 @@ async def tune_shadow(body: dict | None = None) -> dict:
         "proposal": _serialize_proposal(proposal),
         "replay_report": replay_report,
     }
+
+
+@router.post(
+    "/audit",
+    summary="Decision audit (current vs proposed)",
+    response_description="Audit report with per-market rows and checksums; does not apply policy.",
+)
+async def policy_audit(body: dict | None = None) -> dict:
+    """
+    Compare analyzer decisions under current vs proposed policy on provided snapshots.
+    Returns audit_report (summary counts, per-market change counts, rows). Read-only; does NOT apply policy.
+    Body: optional proposed_policy (or proposal with proposed_policy), optional snapshots (same shape as tune/shadow).
+    """
+    body = body or {}
+    snapshots = body.get("snapshots")
+    if not isinstance(snapshots, list):
+        raise HTTPException(status_code=400, detail="snapshots (list) required in body")
+    if len(snapshots) == 0:
+        return {
+            "summary": {"total_markets": 0, "changed_count": 0, "unchanged_count": 0, "per_market_change_count": {}},
+            "rows": [],
+            "snapshots_checksum": "",
+            "current_policy_checksum": "",
+            "proposed_policy_checksum": "",
+        }
+
+    current = get_active_policy()
+    proposed_raw = body.get("proposed_policy") or (body.get("proposal") or {}).get("proposed_policy")
+    if proposed_raw is None:
+        raise HTTPException(status_code=400, detail="proposed_policy or proposal.proposed_policy required in body")
+    try:
+        proposed = Policy.model_validate(proposed_raw)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid proposed_policy: {e}")
+
+    report = audit_snapshots(snapshots, current, proposed)
+    # Optionally limit rows in response (e.g. 200)
+    rows = report.get("rows") or []
+    if len(rows) > 200:
+        report = {**report, "rows": rows[:200], "_rows_truncated": True, "_rows_limit": 200}
+    return report

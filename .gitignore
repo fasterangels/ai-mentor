@@ -68,3 +68,7 @@ logs/
 # CI E2E artifacts (folder kept via packaging/artifacts/.gitkeep)
 packaging/artifacts/e2e_stdout.txt
 packaging/artifacts/backend.log
+
+# Policy/replay generated reports (do not commit)
+audit_report.json
+replay_report.json
