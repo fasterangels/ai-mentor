@@ -16,23 +16,29 @@ def _stable_dumps(obj: Any) -> str:
 
 def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     """
-    Load index from path. Returns dict with keys: runs (list), latest_run_id (str or None).
+    Load index from path. Returns dict with keys: runs (list), latest_run_id (str or None),
+    live_shadow_runs (list), latest_live_shadow_run_id (str or None).
     If file does not exist or is invalid JSON, returns empty index (no crash).
     """
     path = Path(path)
     if not path.exists():
-        return {"runs": [], "latest_run_id": None}
+        return {"runs": [], "latest_run_id": None, "live_shadow_runs": [], "latest_live_shadow_run_id": None}
     try:
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
     except (json.JSONDecodeError, OSError):
-        return {"runs": [], "latest_run_id": None}
+        return {"runs": [], "latest_run_id": None, "live_shadow_runs": [], "latest_live_shadow_run_id": None}
     runs = data.get("runs")
     if not isinstance(runs, list):
         runs = []
+    live_shadow_runs = data.get("live_shadow_runs")
+    if not isinstance(live_shadow_runs, list):
+        live_shadow_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
+        "live_shadow_runs": live_shadow_runs,
+        "latest_live_shadow_run_id": data.get("latest_live_shadow_run_id"),
     }
 
 
@@ -57,6 +63,27 @@ def append_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any
     runs.append(entry)
     index["runs"] = runs
     index["latest_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_live_shadow_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a live shadow compare run entry. run_meta: run_id, created_at_utc, connector_name,
+    matches_count, summary (dict), alerts_count.
+    Sets latest_live_shadow_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("live_shadow_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "connector_name": run_meta.get("connector_name"),
+        "matches_count": run_meta.get("matches_count"),
+        "summary": run_meta.get("summary"),
+        "alerts_count": run_meta.get("alerts_count"),
+    }
+    runs.append(entry)
+    index["live_shadow_runs"] = runs
+    index["latest_live_shadow_run_id"] = run_meta.get("run_id")
     return index
 
 
