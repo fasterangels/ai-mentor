@@ -38,6 +38,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_provider_parity_run_id": None,
             "quality_audit_runs": [],
             "latest_quality_audit_run_id": None,
+            "burn_in_ops_runs": [],
+            "latest_burn_in_ops_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -58,6 +60,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_provider_parity_run_id": None,
             "quality_audit_runs": [],
             "latest_quality_audit_run_id": None,
+            "burn_in_ops_runs": [],
+            "latest_burn_in_ops_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -80,6 +84,12 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     quality_audit_runs = data.get("quality_audit_runs")
     if not isinstance(quality_audit_runs, list):
         quality_audit_runs = []
+    burn_in_ops_runs = data.get("burn_in_ops_runs")
+    if not isinstance(burn_in_ops_runs, list):
+        burn_in_ops_runs = []
+    burn_in_ops_prune_log = data.get("burn_in_ops_prune_log")
+    if not isinstance(burn_in_ops_prune_log, list):
+        burn_in_ops_prune_log = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -95,6 +105,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "latest_provider_parity_run_id": data.get("latest_provider_parity_run_id"),
         "quality_audit_runs": quality_audit_runs,
         "latest_quality_audit_run_id": data.get("latest_quality_audit_run_id"),
+        "burn_in_ops_runs": burn_in_ops_runs,
+        "latest_burn_in_ops_run_id": data.get("latest_burn_in_ops_run_id"),
+        "burn_in_ops_prune_log": burn_in_ops_prune_log,
     }
 
 
@@ -244,6 +257,28 @@ def append_quality_audit_run(index: Dict[str, Any], run_meta: Dict[str, Any]) ->
     runs.append(entry)
     index["quality_audit_runs"] = runs
     index["latest_quality_audit_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_burn_in_ops_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a burn-in ops run (consolidated bundle). run_meta: run_id, created_at_utc,
+    status, alerts_count, activated (bool), matches_count, connector_name.
+    Sets latest_burn_in_ops_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("burn_in_ops_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "status": run_meta.get("status"),
+        "alerts_count": run_meta.get("alerts_count"),
+        "activated": run_meta.get("activated", False),
+        "matches_count": run_meta.get("matches_count"),
+        "connector_name": run_meta.get("connector_name"),
+    }
+    runs.append(entry)
+    index["burn_in_ops_runs"] = runs
+    index["latest_burn_in_ops_run_id"] = run_meta.get("run_id")
     return index
 
 
