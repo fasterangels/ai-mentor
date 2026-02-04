@@ -183,3 +183,139 @@ async def test_kill_switch_overrides_activation(test_db, stub_client) -> None:
         finally:
             if original:
                 register_connector("stub_live_platform", original)
+
+
+@pytest.mark.asyncio
+async def test_burn_in_off_no_writes(test_db, stub_client) -> None:
+    """Burn-in mode OFF (activation=False): no writes occur."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("LIVE_IO_ALLOWED", "1")
+        m.setenv("STUB_LIVE_MODE", "ok")
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "burn_in")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.setenv("ACTIVATION_CONNECTORS", "stub_live_platform")
+        m.setenv("ACTIVATION_MAX_MATCHES", "1")
+        
+        from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+        from ingestion.registry import get_connector, register_connector
+        adapter = StubLivePlatformAdapter(base_url="http://testserver")
+        adapter._base_url = "http://testserver"
+        adapter._client = stub_client
+        
+        original = get_connector("stub_live_platform")
+        try:
+            register_connector("stub_live_platform", adapter)
+            match_id = "stub_live_001"
+            
+            async with get_database_manager().session() as session:
+                report = await run_shadow_pipeline(
+                    session,
+                    connector_name="stub_live_platform",
+                    match_id=match_id,
+                    final_score={"home": 2, "away": 1},
+                    status="FINAL",
+                    now_utc=datetime(2025, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                    activation=False,  # Burn-in / activation OFF
+                )
+                
+                assert "activation" in report
+                assert report["activation"]["activated"] is False
+                assert report.get("analysis", {}).get("snapshot_id") is None
+        finally:
+            if original:
+                register_connector("stub_live_platform", original)
+
+
+@pytest.mark.asyncio
+async def test_burn_in_on_at_most_one_match_activated_and_audit(test_db, stub_client) -> None:
+    """Burn-in ON with stub connector: at most 1 match activated and audit written."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("LIVE_IO_ALLOWED", "1")
+        m.setenv("STUB_LIVE_MODE", "ok")
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "burn_in")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.setenv("ACTIVATION_CONNECTORS", "stub_live_platform")  # allow stub in burn-in
+        m.setenv("ACTIVATION_MARKETS", "1X2")
+        m.setenv("ACTIVATION_MAX_MATCHES", "1")
+        m.setenv("ACTIVATION_MIN_CONFIDENCE_BURN_IN", "0.5")
+        
+        from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+        from ingestion.registry import get_connector, register_connector
+        adapter = StubLivePlatformAdapter(base_url="http://testserver")
+        adapter._base_url = "http://testserver"
+        adapter._client = stub_client
+        
+        original = get_connector("stub_live_platform")
+        try:
+            register_connector("stub_live_platform", adapter)
+            match_id = "stub_live_001"
+            
+            async with get_database_manager().session() as session:
+                report = await run_shadow_pipeline(
+                    session,
+                    connector_name="stub_live_platform",
+                    match_id=match_id,
+                    final_score={"home": 2, "away": 1},
+                    status="FINAL",
+                    now_utc=datetime(2025, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                    activation=True,
+                )
+                
+                assert "activation" in report
+                assert "audits" in report["activation"]
+                audits = report["activation"]["audits"]
+                assert len(audits) >= 1
+                activated_count = sum(1 for a in audits if a.get("activation_allowed"))
+                assert activated_count <= 1, "Burn-in caps at most 1 match activated"
+                if report["activation"].get("burn_in"):
+                    assert "activated_matches" in report["activation"]["burn_in"]
+                    assert "guardrail_state" in report["activation"]["burn_in"]
+                if report["activation"].get("activated"):
+                    assert report.get("analysis", {}).get("snapshot_id") is not None
+        finally:
+            if original:
+                register_connector("stub_live_platform", original)
+
+
+@pytest.mark.asyncio
+async def test_kill_switch_overrides_burn_in(test_db, stub_client) -> None:
+    """ACTIVATION_KILL_SWITCH=true forces shadow-only even in burn-in mode."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("LIVE_IO_ALLOWED", "1")
+        m.setenv("STUB_LIVE_MODE", "ok")
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "burn_in")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.setenv("ACTIVATION_CONNECTORS", "stub_live_platform")
+        m.setenv("ACTIVATION_KILL_SWITCH", "true")
+        
+        from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+        from ingestion.registry import get_connector, register_connector
+        adapter = StubLivePlatformAdapter(base_url="http://testserver")
+        adapter._base_url = "http://testserver"
+        adapter._client = stub_client
+        
+        original = get_connector("stub_live_platform")
+        try:
+            register_connector("stub_live_platform", adapter)
+            match_id = "stub_live_001"
+            
+            async with get_database_manager().session() as session:
+                report = await run_shadow_pipeline(
+                    session,
+                    connector_name="stub_live_platform",
+                    match_id=match_id,
+                    final_score={"home": 2, "away": 1},
+                    status="FINAL",
+                    now_utc=datetime(2025, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                    activation=True,
+                )
+                
+                assert report["activation"]["activated"] is False
+                assert "KILL_SWITCH" in report["activation"]["reason"].upper()
+                assert report.get("analysis", {}).get("snapshot_id") is None
+        finally:
+            if original:
+                register_connector("stub_live_platform", original)

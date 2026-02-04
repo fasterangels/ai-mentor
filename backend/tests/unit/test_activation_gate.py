@@ -239,3 +239,40 @@ def test_get_activation_config() -> None:
         assert "1X2" in config["allowed_markets"]
         assert config["max_matches"] == 10
         assert config["activation_min_confidence"] == 0.8
+
+
+def test_burn_in_requires_live_io_allowed() -> None:
+    """Burn-in mode requires LIVE_IO_ALLOWED=true in addition to LIVE_WRITES_ALLOWED."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "burn_in")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.delenv("LIVE_IO_ALLOWED", raising=False)
+        m.setenv("ACTIVATION_CONNECTORS", "real_provider")
+        allowed, reason = check_activation_gate(
+            connector_name="real_provider",
+            market="1X2",
+            confidence=0.9,
+            policy_min_confidence=0.7,
+        )
+        assert not allowed
+        assert "LIVE_IO_ALLOWED" in reason
+
+
+def test_kill_switch_forces_shadow_only_in_burn_in() -> None:
+    """ACTIVATION_KILL_SWITCH=true forces shadow-only even when ACTIVATION_MODE=burn_in."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("ACTIVATION_KILL_SWITCH", "true")
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "burn_in")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.setenv("LIVE_IO_ALLOWED", "true")
+        m.setenv("ACTIVATION_CONNECTORS", "real_provider")
+        allowed, reason = check_activation_gate(
+            connector_name="real_provider",
+            market="1X2",
+            confidence=0.9,
+            policy_min_confidence=0.7,
+        )
+        assert not allowed
+        assert "KILL_SWITCH" in reason.upper()

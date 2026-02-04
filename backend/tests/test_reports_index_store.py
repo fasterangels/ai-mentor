@@ -14,13 +14,20 @@ if str(_backend) not in sys.path:
 
 import pytest
 
-from reports.index_store import load_index, append_run, save_index
+from reports.index_store import (
+    append_burn_in_run,
+    load_index,
+    append_run,
+    save_index,
+)
 
 
 def test_load_index_missing_returns_empty(tmp_path: Path) -> None:
     index = load_index(tmp_path / "nonexistent.json")
     assert index["runs"] == []
     assert index["latest_run_id"] is None
+    assert index.get("burn_in_runs") == []
+    assert index.get("latest_burn_in_run_id") is None
 
 
 def test_load_index_invalid_json_returns_empty(tmp_path: Path) -> None:
@@ -77,3 +84,26 @@ def test_append_run_updates_latest_run_id_and_persists_stable_json(tmp_path: Pat
     index3 = load_index(index_path)
     assert index3["latest_run_id"] == run_meta2["run_id"]
     assert len(index3["runs"]) == 2
+
+
+def test_append_burn_in_run_updates_burn_in_runs(tmp_path: Path) -> None:
+    index_path = tmp_path / "index.json"
+    index = load_index(index_path)
+    assert index.get("burn_in_runs") == []
+    assert index.get("latest_burn_in_run_id") is None
+
+    append_burn_in_run(index, {
+        "run_id": "shadow_batch_20250601_120000_abc12345",
+        "created_at_utc": "2025-06-01T12:00:00+00:00",
+        "connector_name": "real_provider",
+        "matches_count": 1,
+        "burn_in_summary": {
+            "activated_matches": ["m1"],
+            "rejected_matches": [],
+            "burn_in_confidence_gate": 0.85,
+            "guardrail_state": {},
+        },
+    })
+    assert index["latest_burn_in_run_id"] == "shadow_batch_20250601_120000_abc12345"
+    assert len(index["burn_in_runs"]) == 1
+    assert index["burn_in_runs"][0]["burn_in_summary"]["activated_matches"] == ["m1"]

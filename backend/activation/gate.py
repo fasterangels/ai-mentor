@@ -22,7 +22,7 @@ def _activation_enabled() -> bool:
 
 
 def _activation_mode() -> str:
-    """Get activation mode (must be 'limited' for activation)."""
+    """Get activation mode: 'limited' or 'burn_in' for activation."""
     return os.environ.get("ACTIVATION_MODE", "").strip().lower()
 
 
@@ -129,13 +129,32 @@ def check_activation_gate(
     if not _activation_enabled():
         return False, "ACTIVATION_ENABLED is not set"
     
-    if _activation_mode() != "limited":
-        return False, f"ACTIVATION_MODE must be 'limited' (got '{_activation_mode()}')"
+    mode = _activation_mode()
+    if mode not in ("limited", "burn_in"):
+        return False, f"ACTIVATION_MODE must be 'limited' or 'burn_in' (got '{mode}')"
     
     if not _live_writes_allowed():
         return False, "LIVE_WRITES_ALLOWED is not set"
     
-    # 3. Readiness checks
+    # Burn-in: also requires LIVE_IO_ALLOWED
+    if mode == "burn_in":
+        from ingestion.live_io import live_io_allowed
+        if not live_io_allowed():
+            return False, "LIVE_IO_ALLOWED is not set (required for burn-in)"
+    
+    # Burn-in: use stricter burn-in gate
+    if mode == "burn_in":
+        from activation.burn_in import check_burn_in_gate
+        allowed, reason, guardrail_state = check_burn_in_gate(
+            connector_name=connector_name,
+            market=market,
+            confidence=confidence,
+            policy_min_confidence=policy_min_confidence,
+            index_path=index_path,
+        )
+        return allowed, reason
+    
+    # 3. Readiness checks (limited mode)
     ready, reason = _check_readiness()
     if not ready:
         return False, f"Readiness check failed: {reason}"
@@ -188,11 +207,28 @@ def check_activation_gate_batch(
     if not _activation_enabled():
         return False, "ACTIVATION_ENABLED is not set"
     
-    if _activation_mode() != "limited":
-        return False, f"ACTIVATION_MODE must be 'limited' (got '{_activation_mode()}')"
+    mode = _activation_mode()
+    if mode not in ("limited", "burn_in"):
+        return False, f"ACTIVATION_MODE must be 'limited' or 'burn_in' (got '{mode}')"
     
     if not _live_writes_allowed():
         return False, "LIVE_WRITES_ALLOWED is not set"
+    
+    # Burn-in: also requires LIVE_IO_ALLOWED
+    if mode == "burn_in":
+        from ingestion.live_io import live_io_allowed
+        if not live_io_allowed():
+            return False, "LIVE_IO_ALLOWED is not set (required for burn-in)"
+    
+    # Burn-in: use burn-in batch gate (caps 1-3, real_provider only)
+    if mode == "burn_in":
+        from activation.burn_in import check_burn_in_gate_batch
+        allowed, reason, _ = check_burn_in_gate_batch(
+            connector_name=connector_name,
+            match_count=match_count,
+            index_path=index_path,
+        )
+        return allowed, reason
     
     # 3. Connector whitelist
     allowed_connectors = _activation_connectors()
@@ -219,7 +255,7 @@ def check_activation_gate_batch(
 
 def get_activation_config() -> Dict[str, Any]:
     """Get current activation configuration (for reporting)."""
-    return {
+    config = {
         "kill_switch_active": _kill_switch_active(),
         "activation_enabled": _activation_enabled(),
         "activation_mode": _activation_mode(),
@@ -229,3 +265,7 @@ def get_activation_config() -> Dict[str, Any]:
         "max_matches": _activation_max_matches(),
         "activation_min_confidence": _activation_min_confidence(),
     }
+    if _activation_mode() == "burn_in":
+        from activation.burn_in import get_burn_in_config
+        config["burn_in"] = get_burn_in_config()
+    return config

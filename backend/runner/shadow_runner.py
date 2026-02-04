@@ -183,6 +183,21 @@ async def run_shadow_batch(
         from activation.audit import build_activation_summary
         activation_summary.update(build_activation_summary(all_activation_audits))
 
+    # Burn-in: abort activation if any live IO alert (max_live_io_alerts = 0)
+    from activation.gate import _activation_mode
+    if activation and _activation_mode() == "burn_in":
+        from activation.burn_in import BURN_IN_MAX_LIVE_IO_ALERTS, get_burn_in_config
+        if len(live_io_alerts) > BURN_IN_MAX_LIVE_IO_ALERTS:
+            activation_summary["activated"] = False
+            activation_summary["reason"] = f"Burn-in: live IO alerts {len(live_io_alerts)} exceeds max {BURN_IN_MAX_LIVE_IO_ALERTS}"
+        activation_summary["burn_in"] = {
+            "activated_matches": [a.get("match_id") for a in all_activation_audits if a.get("activation_allowed")],
+            "rejected_matches": [a.get("match_id") for a in all_activation_audits if not a.get("activation_allowed")],
+            "rejected_reasons": list({a.get("activation_reason") for a in all_activation_audits if not a.get("activation_allowed")}),
+            "burn_in_confidence_gate": get_burn_in_config().get("burn_in_min_confidence"),
+            "guardrail_state": {"live_io_alerts_count": len(live_io_alerts), "max_live_io_alerts": BURN_IN_MAX_LIVE_IO_ALERTS},
+        }
+
     result: Dict[str, Any] = {
         "run_meta": run_meta,
         "per_match": per_match,
