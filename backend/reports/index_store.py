@@ -32,6 +32,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_live_shadow_analyze_run_id": None,
             "activation_runs": [],
             "latest_activation_run_id": None,
+            "burn_in_runs": [],
+            "latest_burn_in_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -46,6 +48,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_live_shadow_analyze_run_id": None,
             "activation_runs": [],
             "latest_activation_run_id": None,
+            "burn_in_runs": [],
+            "latest_burn_in_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -59,6 +63,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     activation_runs = data.get("activation_runs")
     if not isinstance(activation_runs, list):
         activation_runs = []
+    burn_in_runs = data.get("burn_in_runs")
+    if not isinstance(burn_in_runs, list):
+        burn_in_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -68,6 +75,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "latest_live_shadow_analyze_run_id": data.get("latest_live_shadow_analyze_run_id"),
         "activation_runs": activation_runs,
         "latest_activation_run_id": data.get("latest_activation_run_id"),
+        "burn_in_runs": burn_in_runs,
+        "latest_burn_in_run_id": data.get("latest_burn_in_run_id"),
     }
 
 
@@ -156,6 +165,27 @@ def append_activation_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Di
     runs.append(entry)
     index["activation_runs"] = runs
     index["latest_activation_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_burn_in_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a burn-in run summary. run_meta: run_id, created_at_utc, connector_name,
+    matches_count, burn_in_summary (dict with activated_matches, rejected_matches,
+    rejected_reasons, burn_in_confidence_gate, guardrail_state).
+    Sets latest_burn_in_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("burn_in_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "connector_name": run_meta.get("connector_name"),
+        "matches_count": run_meta.get("matches_count"),
+        "burn_in_summary": run_meta.get("burn_in_summary", {}),
+    }
+    runs.append(entry)
+    index["burn_in_runs"] = runs
+    index["latest_burn_in_run_id"] = run_meta.get("run_id")
     return index
 
 
