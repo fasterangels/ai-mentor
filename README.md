@@ -265,6 +265,28 @@ See **docs/runbook_burnin.md** for required env, cadence, and incident playbook.
 
 ---
 
+### v1.0 Burn-in Operations
+
+**Daily run (preset burn_in_daily)**  
+Use the preset to run burn-in with activation enabled (one match, burn_in mode):
+
+- **Runner script (Unix):** `./docs/burn_in_daily.sh` — sets env (ACTIVATION_ENABLED=true, ACTIVATION_MODE=burn_in, ACTIVATION_MAX_MATCHES=1, LIVE_IO_ALLOWED=true, LIVE_WRITES_ALLOWED=true, ACTIVATION_KILL_SWITCH=false), runs `ai-mentor ops burn-in-run --activation` once, **exits non-zero if guardrails trigger critical alerts** (status != ok or alerts_count > 0).
+- **Runner script (Windows):** `.\docs\burn_in_daily.ps1` — same behavior.
+- Preset details: **docs/burn_in_daily_preset.md**.
+
+**What “normal” looks like**  
+- Status `ok`, alerts_count `0`, activated `true` or `false` depending on gates. Matches count and connector name in the last line of output (or in the daily summary).
+
+**When to flip the kill-switch**  
+- Set **ACTIVATION_KILL_SWITCH=true** (or **ACTIVATION_ENABLED=false**) immediately if alerts spike, live IO degrades, or you need to stop activation for any reason. All runs then become shadow-only (no writes, no activation). See **docs/runbook_burnin.md** incident playbook.
+
+**Daily summary**  
+- After a run, print a concise summary of the latest burn-in bundle (alerts, activated count, latency/confidence when available):  
+  `python tools/burn_in_summary.py [--reports-dir reports]`  
+  No persistence changes; reads `reports/index.json` and `reports/burn_in/<latest_run_id>/`.
+
+---
+
 ## 📊 Performance Metrics
 
 Access real-time performance data:
