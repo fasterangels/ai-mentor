@@ -18,6 +18,7 @@ from .prediction_outcome import PredictionOutcome
 from .raw_payload import RawPayload
 from .season import Season
 from .source_mapping import SourceEntityMap
+from .snapshot_resolution import SnapshotResolution
 from .standings import StandingsRow, StandingsSnapshot
 from .team import Team
 from .team_alias import TeamAlias
@@ -34,6 +35,7 @@ __all__ = [
     "RawPayload",
     "Season",
     "SourceEntityMap",
+    "SnapshotResolution",
     "StandingsRow",
     "StandingsSnapshot",
     "Team",

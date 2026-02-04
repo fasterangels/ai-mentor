@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import desc, select
@@ -31,5 +32,20 @@ class AnalysisRunRepository(BaseRepository[AnalysisRun]):
             .order_by(desc(AnalysisRun.created_at_utc))
             .limit(limit)
         )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_by_created_between(
+        self,
+        from_utc: Optional[datetime] = None,
+        to_utc: Optional[datetime] = None,
+        limit: int = 5000,
+    ) -> List[AnalysisRun]:
+        """List analysis runs with created_at_utc in range."""
+        stmt = select(AnalysisRun).order_by(desc(AnalysisRun.created_at_utc)).limit(limit)
+        if from_utc is not None:
+            stmt = stmt.where(AnalysisRun.created_at_utc >= from_utc)
+        if to_utc is not None:
+            stmt = stmt.where(AnalysisRun.created_at_utc <= to_utc)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
