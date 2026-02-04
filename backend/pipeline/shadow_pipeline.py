@@ -58,18 +58,35 @@ async def run_shadow_pipeline(
     home = int(final_score.get("home", 0))
     away = int(final_score.get("away", 0))
 
-    if connector_name == "dummy":
-        await _ensure_dummy_match(session, match_id, now)
+    evidence_pack: Optional[EvidencePack] = None
 
-    # 1) Run pipeline (data fetch + cache) -> evidence_pack
-    pipeline_input = PipelineInput(
-        match_id=match_id,
-        domains=["fixtures", "stats"],
-        window_hours=72,
-        force_refresh=False,
-    )
-    pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run)
-    evidence_pack: Optional[EvidencePack] = pipeline_result.evidence_pack
+    if connector_name == "sample_platform":
+        # Recorded fixtures only; no run_pipeline
+        from ingestion.registry import get_connector
+        from ingestion.evidence_builder import ingested_to_evidence_pack
+
+        adapter = get_connector("sample_platform")
+        if not adapter:
+            return _error_report("CONNECTOR_NOT_FOUND", "sample_platform adapter not registered")
+        ingested = adapter.fetch_match_data(match_id)
+        if not ingested:
+            return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
+        await _ensure_sample_platform_match(session, ingested, now)
+        evidence_pack = ingested_to_evidence_pack(ingested, captured_at_utc=now)
+    else:
+        if connector_name == "dummy":
+            await _ensure_dummy_match(session, match_id, now)
+
+        # 1) Run pipeline (data fetch + cache) -> evidence_pack
+        pipeline_input = PipelineInput(
+            match_id=match_id,
+            domains=["fixtures", "stats"],
+            window_hours=72,
+            force_refresh=False,
+        )
+        pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run)
+        evidence_pack = pipeline_result.evidence_pack
+
     if not evidence_pack:
         return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack")
 
@@ -194,6 +211,61 @@ async def run_shadow_pipeline(
     if dry_run:
         report["dry_run"] = True
     return report
+
+
+def _slug(s: str, max_len: int = 32) -> str:
+    """Deterministic slug for IDs (lowercase, spaces -> underscore)."""
+    out = "".join(c if c.isalnum() or c in " -_" else "" for c in (s or ""))
+    out = out.replace(" ", "_").lower().strip("_") or "unknown"
+    return out[:max_len]
+
+
+async def _ensure_sample_platform_match(
+    session: AsyncSession, ingested: Any, kickoff: datetime
+) -> None:
+    """Ensure match exists for sample_platform connector from ingested fixture data."""
+    from models.match import Match
+    from models.competition import Competition
+    from models.season import Season
+    from models.team import Team
+    from repositories.match_repo import MatchRepository
+
+    match_id = ingested.match_id
+    match_repo = MatchRepository(session)
+    existing = await match_repo.get_by_id(match_id)
+    if existing:
+        return
+
+    comp_slug = _slug(ingested.competition, 24)
+    comp_id = f"sample_platform_comp_{comp_slug}"
+    season_id = "sample_platform_season_1"
+    home_id = f"sample_platform_team_{_slug(ingested.home_team)}"
+    away_id = f"sample_platform_team_{_slug(ingested.away_team)}"
+
+    if await session.get(Competition, comp_id) is None:
+        session.add(Competition(id=comp_id, name=ingested.competition, country="XX", tier=1, is_active=True))
+    if await session.get(Season, season_id) is None:
+        session.add(Season(id=season_id, competition_id=comp_id, name="2025", year_start=2025, year_end=2026, is_active=True))
+    if await session.get(Team, home_id) is None:
+        session.add(Team(id=home_id, name=ingested.home_team, country="XX", is_active=True))
+    if await session.get(Team, away_id) is None:
+        session.add(Team(id=away_id, name=ingested.away_team, country="XX", is_active=True))
+    await session.flush()
+
+    kickoff_dt = datetime.fromisoformat(ingested.kickoff_utc.replace("Z", "+00:00"))
+    if kickoff_dt.tzinfo is None:
+        kickoff_dt = kickoff_dt.replace(tzinfo=timezone.utc)
+
+    session.add(Match(
+        id=match_id,
+        competition_id=comp_id,
+        season_id=season_id,
+        kickoff_utc=kickoff_dt,
+        status="FINAL",
+        home_team_id=home_id,
+        away_team_id=away_id,
+    ))
+    await session.flush()
 
 
 async def _ensure_dummy_match(session: AsyncSession, match_id: str, kickoff: datetime) -> None:
