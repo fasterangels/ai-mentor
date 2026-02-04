@@ -382,6 +382,37 @@ Once running, access interactive API docs:
 - `POST /messages` - Send message (non-streaming)
 - `POST /messages/stream` - Send message (streaming)
 - `GET /conversations` - List conversations
+
+### Reports viewer (read-only)
+
+The backend exposes a **read-only reports API** to inspect `reports/index.json` and individual report files (e.g. burn-in bundles, tuning plans) without writing anything.
+
+**How to run and query:**
+
+1. **Reports directory**  
+   By default the API serves from the `reports/` directory (relative to the process working directory). Override with env:  
+   `REPORTS_DIR=/path/to/reports`
+
+2. **Endpoints**
+   - `GET /api/v1/reports/index` — returns the full `reports/index.json`.
+   - `GET /api/v1/reports/item/{run_id}` — returns which index lists contain that `run_id`, their entry, and relative paths to report files (e.g. `burn_in/<run_id>/summary.json`).
+   - `GET /api/v1/reports/file?path=<relative>` — serves a single report JSON file. `path` must be relative and under `reports/` (path traversal is blocked).
+
+3. **Optional auth**
+   - If you set `REPORTS_READ_TOKEN` in the environment, the API requires the header `X-Reports-Token: <value>` to match.  
+   - If `REPORTS_READ_TOKEN` is not set, no token is required (suitable for local use).
+
+**Example (no token):**
+```bash
+curl http://localhost:8000/api/v1/reports/index
+curl "http://localhost:8000/api/v1/reports/file?path=burn_in/my_run_id/summary.json"
+```
+
+**Example (with token):**
+```bash
+export REPORTS_READ_TOKEN=my-secret
+curl -H "X-Reports-Token: my-secret" http://localhost:8000/api/v1/reports/index
+```
 - `GET /memories` - List memories
 - `GET /knowledge` - List knowledge entries
 
