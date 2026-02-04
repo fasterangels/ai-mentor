@@ -83,9 +83,12 @@ async def test_activation_off_mode_no_writes(test_db, stub_client) -> None:
                 assert "activation" in report
                 assert report["activation"]["activated"] is False
                 assert report["activation"]["audits"]
-                
-                # Check that snapshot_id is None (no writes)
-                assert report.get("analysis", {}).get("snapshot_id") is None
+                # No persistence when activation=False: no AnalysisRun for this match
+                from repositories.analysis_run_repo import AnalysisRunRepository
+                run_repo = AnalysisRunRepository(session)
+                runs = await run_repo.list_recent(limit=20)
+                run = next((r for r in runs if r.match_id == match_id), None)
+                assert run is None, "No DB writes when activation=False"
         finally:
             if original:
                 register_connector("stub_live_platform", original)
@@ -128,12 +131,18 @@ async def test_activation_on_mode_writes_occur(test_db, stub_client) -> None:
                 # Check activation section
                 assert "activation" in report
                 assert report["activation"]["audits"]
-                
-                # If activation was allowed, snapshot_id should be set
-                # (may be None if guardrails failed, but structure should exist)
+                # If activation was allowed, assert persistence via repositories
                 activation_section = report["activation"]
                 if activation_section.get("activated"):
-                    assert report.get("analysis", {}).get("snapshot_id") is not None
+                    from repositories.analysis_run_repo import AnalysisRunRepository
+                    from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
+                    run_repo = AnalysisRunRepository(session)
+                    resolution_repo = SnapshotResolutionRepository(session)
+                    runs = await run_repo.list_recent(limit=20)
+                    run = next((r for r in runs if r.match_id == match_id), None)
+                    assert run is not None, "AnalysisRunRepository should have entry when activated"
+                    res = await resolution_repo.get_by_analysis_run_id(run.id)
+                    assert res is not None, "SnapshotResolutionRepository should have entry when activated"
         finally:
             if original:
                 register_connector("stub_live_platform", original)
@@ -177,9 +186,12 @@ async def test_kill_switch_overrides_activation(test_db, stub_client) -> None:
                 assert "activation" in report
                 assert report["activation"]["activated"] is False
                 assert "KILL_SWITCH" in report["activation"]["reason"].upper()
-                
-                # No writes should occur
-                assert report.get("analysis", {}).get("snapshot_id") is None
+                # No writes when kill-switch: no AnalysisRun for this match
+                from repositories.analysis_run_repo import AnalysisRunRepository
+                run_repo = AnalysisRunRepository(session)
+                runs = await run_repo.list_recent(limit=20)
+                run = next((r for r in runs if r.match_id == match_id), None)
+                assert run is None, "No DB writes when kill-switch is on"
         finally:
             if original:
                 register_connector("stub_live_platform", original)
@@ -221,7 +233,12 @@ async def test_burn_in_off_no_writes(test_db, stub_client) -> None:
                 
                 assert "activation" in report
                 assert report["activation"]["activated"] is False
-                assert report.get("analysis", {}).get("snapshot_id") is None
+                # No persistence when activation=False
+                from repositories.analysis_run_repo import AnalysisRunRepository
+                run_repo = AnalysisRunRepository(session)
+                runs = await run_repo.list_recent(limit=20)
+                run = next((r for r in runs if r.match_id == match_id), None)
+                assert run is None, "No DB writes when burn-in/activation off"
         finally:
             if original:
                 register_connector("stub_live_platform", original)
@@ -273,7 +290,15 @@ async def test_burn_in_on_at_most_one_match_activated_and_audit(test_db, stub_cl
                     assert "activated_matches" in report["activation"]["burn_in"]
                     assert "guardrail_state" in report["activation"]["burn_in"]
                 if report["activation"].get("activated"):
-                    assert report.get("analysis", {}).get("snapshot_id") is not None
+                    from repositories.analysis_run_repo import AnalysisRunRepository
+                    from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
+                    run_repo = AnalysisRunRepository(session)
+                    resolution_repo = SnapshotResolutionRepository(session)
+                    runs = await run_repo.list_recent(limit=20)
+                    run = next((r for r in runs if r.match_id == match_id), None)
+                    assert run is not None, "AnalysisRunRepository should have entry when burn-in activated"
+                    res = await resolution_repo.get_by_analysis_run_id(run.id)
+                    assert res is not None, "SnapshotResolutionRepository should have entry when burn-in activated"
         finally:
             if original:
                 register_connector("stub_live_platform", original)
@@ -315,7 +340,12 @@ async def test_kill_switch_overrides_burn_in(test_db, stub_client) -> None:
                 
                 assert report["activation"]["activated"] is False
                 assert "KILL_SWITCH" in report["activation"]["reason"].upper()
-                assert report.get("analysis", {}).get("snapshot_id") is None
+                # No writes when kill-switch: no AnalysisRun for this match
+                from repositories.analysis_run_repo import AnalysisRunRepository
+                run_repo = AnalysisRunRepository(session)
+                runs = await run_repo.list_recent(limit=20)
+                run = next((r for r in runs if r.match_id == match_id), None)
+                assert run is None, "No DB writes when kill-switch overrides burn-in"
         finally:
             if original:
                 register_connector("stub_live_platform", original)

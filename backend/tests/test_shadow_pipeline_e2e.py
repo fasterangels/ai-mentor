@@ -41,33 +41,46 @@ def test_db():
 
 @pytest.mark.asyncio
 async def test_shadow_pipeline_creates_analysis_run_and_resolution(test_db):
-    """Run pipeline for dummy-match-1; assert analysis run and snapshot resolution created."""
+    """Run pipeline with activation=True for dummy-match-1; assert persistence via repositories."""
     from repositories.analysis_run_repo import AnalysisRunRepository
     from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 
     now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
-    async with get_database_manager().session() as session:
-        report = await run_shadow_pipeline(
-            session,
-            connector_name="dummy",
-            match_id="dummy-match-1",
-            final_score={"home": 2, "away": 1},
-            status="FINAL",
-            now_utc=now,
-        )
-        assert "error" not in report or report.get("error") is None
-        assert report.get("analysis", {}).get("snapshot_id") is not None
-        snapshot_id = report["analysis"]["snapshot_id"]
+    match_id = "dummy-match-1"
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("ACTIVATION_ENABLED", "true")
+        m.setenv("ACTIVATION_MODE", "limited")
+        m.setenv("LIVE_WRITES_ALLOWED", "true")
+        m.setenv("ACTIVATION_CONNECTORS", "dummy")
+        m.setenv("ACTIVATION_MARKETS", "1X2")
+        m.setenv("ACTIVATION_MAX_MATCHES", "10")
+        m.setenv("ACTIVATION_MIN_CONFIDENCE", "0.5")
+        async with get_database_manager().session() as session:
+            report = await run_shadow_pipeline(
+                session,
+                connector_name="dummy",
+                match_id=match_id,
+                final_score={"home": 2, "away": 1},
+                status="FINAL",
+                now_utc=now,
+                activation=True,
+            )
+            assert "error" not in report or report.get("error") is None
+            assert report.get("ingestion", {}).get("payload_checksum") is not None
+            assert report.get("analysis", {}).get("decisions") is not None
+            assert report.get("evaluation_report_checksum") is not None
 
-        run_repo = AnalysisRunRepository(session)
-        resolution_repo = SnapshotResolutionRepository(session)
-        run = await run_repo.get_by_id(snapshot_id)
-        assert run is not None
-        assert run.match_id == "dummy-match-1"
-        res = await resolution_repo.get_by_analysis_run_id(snapshot_id)
-        assert res is not None
-        assert res.final_home_goals == 2
-        assert res.final_away_goals == 1
+            run_repo = AnalysisRunRepository(session)
+            resolution_repo = SnapshotResolutionRepository(session)
+            runs = await run_repo.list_recent(limit=20)
+            run = next((r for r in runs if r.match_id == match_id), None)
+            assert run is not None, "AnalysisRunRepository should have entry for run"
+            assert run.match_id == match_id
+            res = await resolution_repo.get_by_analysis_run_id(run.id)
+            assert res is not None, "SnapshotResolutionRepository should have entry for match_id"
+            assert res.match_id == match_id
+            assert res.final_home_goals == 2
+            assert res.final_away_goals == 1
 
 
 @pytest.mark.asyncio
@@ -90,8 +103,8 @@ async def test_shadow_pipeline_report_sections_populated(test_db):
     assert "collected_at" in report["ingestion"]
 
     assert "analysis" in report
-    assert "snapshot_id" in report["analysis"]
     assert "markets_picks_confidences" in report["analysis"]
+    assert "decisions" in report["analysis"]
 
     assert "resolution" in report
     assert "market_outcomes" in report["resolution"]
