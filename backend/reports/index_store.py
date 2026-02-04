@@ -34,6 +34,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_activation_run_id": None,
             "burn_in_runs": [],
             "latest_burn_in_run_id": None,
+            "provider_parity_runs": [],
+            "latest_provider_parity_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -50,6 +52,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_activation_run_id": None,
             "burn_in_runs": [],
             "latest_burn_in_run_id": None,
+            "provider_parity_runs": [],
+            "latest_provider_parity_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -66,6 +70,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     burn_in_runs = data.get("burn_in_runs")
     if not isinstance(burn_in_runs, list):
         burn_in_runs = []
+    provider_parity_runs = data.get("provider_parity_runs")
+    if not isinstance(provider_parity_runs, list):
+        provider_parity_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -77,6 +84,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "latest_activation_run_id": data.get("latest_activation_run_id"),
         "burn_in_runs": burn_in_runs,
         "latest_burn_in_run_id": data.get("latest_burn_in_run_id"),
+        "provider_parity_runs": provider_parity_runs,
+        "latest_provider_parity_run_id": data.get("latest_provider_parity_run_id"),
     }
 
 
@@ -186,6 +195,28 @@ def append_burn_in_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[
     runs.append(entry)
     index["burn_in_runs"] = runs
     index["latest_burn_in_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_provider_parity_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a provider parity run. run_meta: run_id, created_at_utc, provider_a, provider_b,
+    matches_count, summary (dict), alerts_count.
+    Sets latest_provider_parity_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("provider_parity_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "provider_a": run_meta.get("provider_a"),
+        "provider_b": run_meta.get("provider_b"),
+        "matches_count": run_meta.get("matches_count"),
+        "summary": run_meta.get("summary"),
+        "alerts_count": run_meta.get("alerts_count"),
+    }
+    runs.append(entry)
+    index["provider_parity_runs"] = runs
+    index["latest_provider_parity_run_id"] = run_meta.get("run_id")
     return index
 
 
