@@ -41,6 +41,7 @@ async def _main() -> int:
         default="shadow_batch_report.json",
         help="Output JSON file path (default: shadow_batch_report.json)",
     )
+    parser.add_argument("--dry-run", action="store_true", help="Do not persist SnapshotResolution or write cache")
     args = parser.parse_args()
 
     match_ids = None
@@ -56,6 +57,7 @@ async def _main() -> int:
                 session,
                 connector_name=args.connector,
                 match_ids=match_ids,
+                dry_run=args.dry_run,
             )
     finally:
         await dispose_database()

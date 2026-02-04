@@ -25,6 +25,7 @@ from core.database import init_database, dispose_database, get_database_manager
 from runner.shadow_runner import run_shadow_batch
 from reports.alerts import evaluate_alerts
 from reports.index_store import load_index, append_run, save_index
+from limits.limits import prune_index
 
 
 def _stable_json(obj: object) -> str:
@@ -50,6 +51,7 @@ async def _main() -> int:
     parser.add_argument("--output-dir", default="reports", help="Reports directory (default: reports)")
     parser.add_argument("--match-ids", default=None, help="Optional comma-separated match IDs")
     parser.add_argument("--now-utc", default=None, help="Optional ISO8601 time for determinism")
+    parser.add_argument("--dry-run", action="store_true", help="Do not persist SnapshotResolution or write cache")
     args = parser.parse_args()
 
     now = _parse_now_utc(args.now_utc)
@@ -70,6 +72,7 @@ async def _main() -> int:
                 connector_name=args.connector,
                 match_ids=match_ids,
                 now_utc=now,
+                dry_run=args.dry_run,
             )
     finally:
         await dispose_database()
@@ -106,8 +109,12 @@ async def _main() -> int:
     index_path = output_dir / "index.json"
     index = load_index(index_path)
     append_run(index, index_run_meta)
+    prune_index(index)
     save_index(index, index_path)
 
+    # Output clearly indicates dry_run when set
+    if batch_report.get("dry_run"):
+        print("dry_run=true", end=" ")
     print(f"{run_id},{report_path},{alerts_count}")
     return 0
 

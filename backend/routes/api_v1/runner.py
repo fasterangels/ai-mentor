@@ -33,11 +33,13 @@ async def shadow_batch_run(
         match_ids = [str(m) for m in match_ids] if match_ids else None
     elif match_ids is not None:
         match_ids = [str(m).strip() for m in match_ids if str(m).strip()]
+    dry_run = bool(body.get("dry_run", False))
 
     report = await run_shadow_batch(
         session,
         connector_name=connector_name,
         match_ids=match_ids,
+        dry_run=dry_run,
     )
     await session.commit()
     return report

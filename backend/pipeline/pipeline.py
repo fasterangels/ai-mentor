@@ -84,7 +84,7 @@ async def _fetch_from_sources(
 
 
 async def run_pipeline(
-    session: AsyncSession, input_data: PipelineInput
+    session: AsyncSession, input_data: PipelineInput, *, dry_run: bool = False
 ) -> PipelineResult:
     """Run the data pipeline for a match.
 
@@ -95,11 +95,12 @@ async def run_pipeline(
     4. Run quality gates
     5. Build consensus
     6. Assemble Evidence Pack
-    7. Persist RawPayloads + logs
+    7. Persist RawPayloads + logs (skipped when dry_run=True)
 
     Args:
         session: AsyncSession for repository access
         input_data: Pipeline input with match_id, domains, etc.
+        dry_run: If True, do not persist raw payloads or write cache.
 
     Returns:
         PipelineResult with status, evidence_pack, and notes
@@ -158,16 +159,17 @@ async def run_pipeline(
             continue
 
         # Step 3: Normalize (already done in _fetch_from_sources)
-        # Step 4: Persist raw payloads
-        for payload in payloads:
-            payload_hash = _compute_payload_hash(payload)
-            await raw_payload_repo.add_payload(
-                source_name=payload["source_name"],
-                domain=domain,
-                payload_hash=payload_hash,
-                payload_json=json.dumps(payload, default=str),
-                related_match_id=input_data.match_id,
-            )
+        # Step 4: Persist raw payloads (skip when dry_run)
+        if not dry_run:
+            for payload in payloads:
+                payload_hash = _compute_payload_hash(payload)
+                await raw_payload_repo.add_payload(
+                    source_name=payload["source_name"],
+                    domain=domain,
+                    payload_hash=payload_hash,
+                    payload_json=json.dumps(payload, default=str),
+                    related_match_id=input_data.match_id,
+                )
 
         # Step 5: Run quality gates
         # Determine required fields per domain
@@ -194,8 +196,8 @@ async def run_pipeline(
 
         evidence_pack.domains[domain] = domain_data
 
-        # Step 7: Cache result (if quality passed)
-        if quality_report.passed and not input_data.force_refresh:
+        # Step 7: Cache result (if quality passed; skip when dry_run)
+        if not dry_run and quality_report.passed and not input_data.force_refresh:
             # Cache the consensus data
             consensus_payload = {
                 "source_name": "consensus",

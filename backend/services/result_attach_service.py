@@ -54,9 +54,12 @@ async def attach_result(
     final_home_goals: int,
     final_away_goals: int,
     status: str = "FINAL",
+    *,
+    persist: bool = True,
 ) -> SnapshotResolution:
     """
-    Load predictions for the run, compute per-market outcomes from final score, persist SnapshotResolution.
+    Load predictions for the run, compute per-market outcomes from final score.
+    If persist=True, persist SnapshotResolution; if False (e.g. dry_run), return resolution without saving.
     """
     pred_repo = PredictionRepository(session)
     resolution_repo = SnapshotResolutionRepository(session)
@@ -96,5 +99,6 @@ async def attach_result(
         market_outcomes_json=json.dumps(market_outcomes, sort_keys=True),
         reason_codes_by_market_json=json.dumps(reason_codes_by_market, sort_keys=True),
     )
-    await resolution_repo.create(resolution)
+    if persist:
+        await resolution_repo.create(resolution)
     return resolution
