@@ -17,14 +17,16 @@ def _stable_dumps(obj: Any) -> str:
 def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     """
     Load index from path. Returns dict with keys: runs (list), latest_run_id (str or None).
-    If file does not exist, returns empty index: {"runs": [], "latest_run_id": None}.
+    If file does not exist or is invalid JSON, returns empty index (no crash).
     """
     path = Path(path)
     if not path.exists():
         return {"runs": [], "latest_run_id": None}
-
-    text = path.read_text(encoding="utf-8")
-    data = json.loads(text)
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = json.loads(text)
+    except (json.JSONDecodeError, OSError):
+        return {"runs": [], "latest_run_id": None}
     runs = data.get("runs")
     if not isinstance(runs, list):
         runs = []
