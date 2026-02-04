@@ -12,7 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ingestion.live_io import live_writes_allowed
+from ingestion.live_io import live_io_metrics_snapshot, live_writes_allowed, reset_metrics
+from guardrails.live_io_guardrails import evaluate as evaluate_live_io_guardrails
 from pipeline.shadow_pipeline import run_shadow_pipeline
 from policy.policy_store import stable_json_dumps
 from repositories.raw_payload_repo import RawPayloadRepository
@@ -65,6 +66,7 @@ async def run_shadow_batch(
         dry_run = not live_writes_allowed()
     now = _normalize_utc(now_utc)
     final_scores = final_scores or {}
+    reset_metrics()
 
     if match_ids is None:
         match_ids = await _get_cached_match_ids(session, connector_name)
@@ -150,6 +152,9 @@ async def run_shadow_batch(
         "matches_count": len(match_ids),
     }
 
+    live_io_metrics = live_io_metrics_snapshot()
+    live_io_alerts = evaluate_live_io_guardrails(live_io_metrics, policy=None)
+
     result: Dict[str, Any] = {
         "run_meta": run_meta,
         "per_match": per_match,
@@ -159,6 +164,8 @@ async def run_shadow_batch(
             "batch_output_checksum": batch_output_checksum,
         },
         "failures": failures,
+        "live_io_metrics": live_io_metrics,
+        "live_io_alerts": live_io_alerts,
     }
     if dry_run:
         result["dry_run"] = True

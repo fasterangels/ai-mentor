@@ -97,6 +97,7 @@ async def _main() -> int:
     # Index entry
     run_meta_batch = batch_report.get("run_meta") or {}
     run_id = report_path.stem  # shadow_batch_YYYYMMDD_HHMMSS_shortchecksum
+    live_io_alerts = batch_report.get("live_io_alerts") or []
     index_run_meta = {
         "run_id": run_id,
         "created_at_utc": run_meta_batch.get("started_at_utc") or now.isoformat(),
@@ -104,6 +105,7 @@ async def _main() -> int:
         "matches_count": run_meta_batch.get("matches_count", 0) if run_meta_batch else 0,
         "batch_output_checksum": checksums.get("batch_output_checksum"),
         "alerts_count": alerts_count,
+        "live_io_alerts_count": len(live_io_alerts),
     }
 
     index_path = output_dir / "index.json"
