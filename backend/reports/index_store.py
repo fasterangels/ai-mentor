@@ -30,6 +30,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_live_shadow_run_id": None,
             "live_shadow_analyze_runs": [],
             "latest_live_shadow_analyze_run_id": None,
+            "activation_runs": [],
+            "latest_activation_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -42,6 +44,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_live_shadow_run_id": None,
             "live_shadow_analyze_runs": [],
             "latest_live_shadow_analyze_run_id": None,
+            "activation_runs": [],
+            "latest_activation_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -52,6 +56,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     live_shadow_analyze_runs = data.get("live_shadow_analyze_runs")
     if not isinstance(live_shadow_analyze_runs, list):
         live_shadow_analyze_runs = []
+    activation_runs = data.get("activation_runs")
+    if not isinstance(activation_runs, list):
+        activation_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -59,6 +66,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "latest_live_shadow_run_id": data.get("latest_live_shadow_run_id"),
         "live_shadow_analyze_runs": live_shadow_analyze_runs,
         "latest_live_shadow_analyze_run_id": data.get("latest_live_shadow_analyze_run_id"),
+        "activation_runs": activation_runs,
+        "latest_activation_run_id": data.get("latest_activation_run_id"),
     }
 
 
@@ -125,6 +134,28 @@ def append_live_shadow_analyze_run(index: Dict[str, Any], run_meta: Dict[str, An
     runs.append(entry)
     index["live_shadow_analyze_runs"] = runs
     index["latest_live_shadow_analyze_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_activation_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append an activation run entry. run_meta: run_id, created_at_utc, connector_name,
+    matches_count, activated (bool), reason (str or None), activation_summary (dict).
+    Sets latest_activation_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("activation_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "connector_name": run_meta.get("connector_name"),
+        "matches_count": run_meta.get("matches_count"),
+        "activated": run_meta.get("activated", False),
+        "reason": run_meta.get("reason"),
+        "activation_summary": run_meta.get("activation_summary", {}),
+    }
+    runs.append(entry)
+    index["activation_runs"] = runs
+    index["latest_activation_run_id"] = run_meta.get("run_id")
     return index
 
 

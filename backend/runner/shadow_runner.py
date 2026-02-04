@@ -55,12 +55,14 @@ async def run_shadow_batch(
     now_utc: Optional[datetime] = None,
     final_scores: Optional[Dict[str, Dict[str, int]]] = None,
     dry_run: Optional[bool] = None,
+    activation: bool = False,
 ) -> Dict[str, Any]:
     """
     Run shadow pipeline for each match and collect a BatchReport.
     If match_ids is None, load all cached matches for connector_name from ingestion cache.
     final_scores: optional map match_id -> {"home": int, "away": int} for tests; else placeholder.
     dry_run: if True, do not persist or write cache; if None, defaults to read-only (not live_writes_allowed()).
+    activation: if True, check activation gate and persist if allowed (still requires env gates).
     """
     if dry_run is None:
         dry_run = not live_writes_allowed()
@@ -85,6 +87,16 @@ async def run_shadow_batch(
     # Deterministic order
     match_ids = sorted(match_ids)
 
+    # Check activation gate for batch (if activation requested)
+    batch_activation_allowed = False
+    batch_activation_reason = None
+    if activation:
+        from activation.gate import check_activation_gate_batch
+        batch_activation_allowed, batch_activation_reason = check_activation_gate_batch(
+            connector_name=connector_name,
+            match_count=len(match_ids),
+        )
+
     # Batch input checksum: connector + match list only (no volatile timestamps)
     batch_input_payload = {"connector_name": connector_name, "match_ids": match_ids}
     batch_input_checksum = _checksum(batch_input_payload)
@@ -93,6 +105,7 @@ async def run_shadow_batch(
     failures: List[Dict[str, Any]] = []
     total_changed_decisions = 0
     per_market_changed_counts: Dict[str, int] = {}
+    all_activation_audits: List[Dict[str, Any]] = []
 
     for match_id in match_ids:
         score = final_scores.get(match_id) or _placeholder_final_score(match_id)
@@ -105,6 +118,7 @@ async def run_shadow_batch(
                 status="FINAL",
                 now_utc=now,
                 dry_run=dry_run,
+                activation=activation,
             )
         except Exception as e:  # noqa: BLE001
             failures.append({"match_id": match_id, "error": str(e)})
@@ -122,6 +136,11 @@ async def run_shadow_batch(
         proposal_checksum = report.get("proposal", {}).get("proposal_checksum")
         audit = report.get("audit") or {}
         changed_count = int(audit.get("changed_count", 0))
+        
+        # Collect activation audits
+        activation_section = report.get("activation") or {}
+        if activation_section.get("audits"):
+            all_activation_audits.extend(activation_section["audits"])
         per_market = audit.get("per_market_change_count") or {}
 
         per_match.append({
@@ -155,6 +174,15 @@ async def run_shadow_batch(
     live_io_metrics = live_io_metrics_snapshot()
     live_io_alerts = evaluate_live_io_guardrails(live_io_metrics, policy=None)
 
+    # Build activation summary
+    activation_summary: Dict[str, Any] = {
+        "activated": batch_activation_allowed if activation else False,
+        "reason": batch_activation_reason if not batch_activation_allowed and activation else None,
+    }
+    if activation and all_activation_audits:
+        from activation.audit import build_activation_summary
+        activation_summary.update(build_activation_summary(all_activation_audits))
+
     result: Dict[str, Any] = {
         "run_meta": run_meta,
         "per_match": per_match,
@@ -166,6 +194,7 @@ async def run_shadow_batch(
         "failures": failures,
         "live_io_metrics": live_io_metrics,
         "live_io_alerts": live_io_alerts,
+        "activation": activation_summary,
     }
     if dry_run:
         result["dry_run"] = True

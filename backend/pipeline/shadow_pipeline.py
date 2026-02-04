@@ -44,12 +44,14 @@ async def run_shadow_pipeline(
     now_utc: Optional[datetime] = None,
     dry_run: bool = False,
     hard_block_persistence: bool = False,
+    activation: bool = False,
 ) -> Dict[str, Any]:
     """
     Run full shadow pipeline: pipeline -> analyze -> attach -> eval -> tune -> audit.
     Returns PipelineReport. Does not apply policy.
     If dry_run=True, do not persist SnapshotResolution and do not write cache; still compute reports/checksums.
     If hard_block_persistence=True, skip ALL DB writes (AnalysisRun, Prediction, SnapshotResolution, cache).
+    If activation=True, check activation gate and only persist if allowed (still requires env gates).
     """
     from models.analysis_run import AnalysisRun
     from models.prediction import Prediction
@@ -119,9 +121,75 @@ async def run_shadow_pipeline(
     min_conf = min_confidence_from_policy(current_policy)
     analyzer_payload = analyze_v2("RESOLVED", evidence_pack, MARKETS_V2, min_confidence=min_conf)
 
-    # 3) Persist analysis run + predictions (skip if hard_block_persistence)
+    # 2.5) Check activation gate for each decision
+    activation_audits: List[Dict[str, Any]] = []
+    activation_allowed_for_match = False
+    from activation.audit import create_activation_audit
+    
+    decisions_list = analyzer_payload.get("decisions") or []
+    # If activation is requested, check gates; otherwise all decisions are shadow-only
+    if activation and not hard_block_persistence and not dry_run:
+        from activation.gate import check_activation_gate
+        
+        for dec in decisions_list:
+            market = dec.get("market") or ""
+            confidence = float(dec.get("confidence") or 0.0)
+            reasons = dec.get("reasons") or []
+            
+            allowed, reason = check_activation_gate(
+                connector_name=connector_name,
+                market=market,
+                confidence=confidence,
+                policy_min_confidence=min_conf,
+            )
+            
+            audit = await create_activation_audit(
+                session=session,
+                connector_name=connector_name,
+                match_id=match_id,
+                market=market,
+                decision=dec,
+                confidence=confidence,
+                reasons=reasons,
+                activation_allowed=allowed,
+                activation_reason=reason,
+                now_utc=now,
+            )
+            activation_audits.append(audit)
+            
+            if allowed:
+                activation_allowed_for_match = True
+    else:
+        # If activation not requested or blocked, all decisions are shadow-only
+        for dec in decisions_list:
+            market = dec.get("market") or ""
+            confidence = float(dec.get("confidence") or 0.0)
+            reasons = dec.get("reasons") or []
+            audit = await create_activation_audit(
+                session=session,
+                connector_name=connector_name,
+                match_id=match_id,
+                market=market,
+                decision=dec,
+                confidence=confidence,
+                reasons=reasons,
+                activation_allowed=False,
+                activation_reason="activation=False or persistence blocked" if not activation else "hard_block_persistence or dry_run",
+                now_utc=now,
+            )
+            activation_audits.append(audit)
+
+    # 3) Persist analysis run + predictions
+    # Skip if: hard_block_persistence, dry_run, or (activation=False OR activation=True but gates failed)
     snapshot_id: Optional[int] = None
-    if not hard_block_persistence:
+    should_persist = not hard_block_persistence and not dry_run
+    if activation:
+        # When activation is requested, only persist if gates passed
+        should_persist = should_persist and activation_allowed_for_match
+    else:
+        # When activation=False (default), shadow-only (no writes)
+        should_persist = False
+    if should_persist:
         run_repo = AnalysisRunRepository(session)
         pred_repo = PredictionRepository(session)
         flags = analyzer_payload.get("analysis_run", {}).get("flags") or []
@@ -166,9 +234,9 @@ async def run_shadow_pipeline(
         # For hard_block_persistence, use placeholder snapshot_id for attach_result
         snapshot_id = None
 
-    # 4) Attach result (SnapshotResolution); skip persist when dry_run or hard_block_persistence
+    # 4) Attach result (SnapshotResolution); skip persist when dry_run, hard_block_persistence, or activation not allowed
     resolution = await attach_result(
-        session, snapshot_id or 0, match_id, home, away, status, persist=not (dry_run or hard_block_persistence)
+        session, snapshot_id or 0, match_id, home, away, status, persist=should_persist and not dry_run
     )
     market_outcomes = json.loads(resolution.market_outcomes_json) if isinstance(resolution.market_outcomes_json, str) else resolution.market_outcomes_json
 
@@ -224,6 +292,11 @@ async def run_shadow_pipeline(
             "snapshots_checksum": audit_report["snapshots_checksum"],
             "current_policy_checksum": audit_report["current_policy_checksum"],
             "proposed_policy_checksum": audit_report["proposed_policy_checksum"],
+        },
+        "activation": {
+            "activated": activation_allowed_for_match if activation else False,
+            "reason": activation_audits[0].get("activation_reason") if activation_audits and not activation_allowed_for_match else None,
+            "audits": activation_audits,
         },
     }
     if dry_run:
