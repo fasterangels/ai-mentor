@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ingestion.live_io import live_writes_allowed
 from pipeline.shadow_pipeline import run_shadow_pipeline
 from policy.policy_store import stable_json_dumps
 from repositories.raw_payload_repo import RawPayloadRepository
@@ -52,14 +53,16 @@ async def run_shadow_batch(
     *,
     now_utc: Optional[datetime] = None,
     final_scores: Optional[Dict[str, Dict[str, int]]] = None,
-    dry_run: bool = False,
+    dry_run: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Run shadow pipeline for each match and collect a BatchReport.
     If match_ids is None, load all cached matches for connector_name from ingestion cache.
     final_scores: optional map match_id -> {"home": int, "away": int} for tests; else placeholder.
-    dry_run: if True, do not persist SnapshotResolution or write cache; still compute reports/checksums.
+    dry_run: if True, do not persist or write cache; if None, defaults to read-only (not live_writes_allowed()).
     """
+    if dry_run is None:
+        dry_run = not live_writes_allowed()
     now = _normalize_utc(now_utc)
     final_scores = final_scores or {}
 
