@@ -40,6 +40,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_quality_audit_run_id": None,
             "burn_in_ops_runs": [],
             "latest_burn_in_ops_run_id": None,
+            "tuning_plan_runs": [],
+            "latest_tuning_plan_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -62,6 +64,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_quality_audit_run_id": None,
             "burn_in_ops_runs": [],
             "latest_burn_in_ops_run_id": None,
+            "tuning_plan_runs": [],
+            "latest_tuning_plan_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -90,6 +94,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     burn_in_ops_prune_log = data.get("burn_in_ops_prune_log")
     if not isinstance(burn_in_ops_prune_log, list):
         burn_in_ops_prune_log = []
+    tuning_plan_runs = data.get("tuning_plan_runs")
+    if not isinstance(tuning_plan_runs, list):
+        tuning_plan_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -108,6 +115,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "burn_in_ops_runs": burn_in_ops_runs,
         "latest_burn_in_ops_run_id": data.get("latest_burn_in_ops_run_id"),
         "burn_in_ops_prune_log": burn_in_ops_prune_log,
+        "tuning_plan_runs": tuning_plan_runs,
+        "latest_tuning_plan_run_id": data.get("latest_tuning_plan_run_id"),
     }
 
 
@@ -279,6 +288,26 @@ def append_burn_in_ops_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> D
     runs.append(entry)
     index["burn_in_ops_runs"] = runs
     index["latest_burn_in_ops_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_tuning_plan_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a tuning plan run. run_meta: run_id, created_at_utc, status (PASS|FAIL), proposal_count, blocked (bool), reasons.
+    Sets latest_tuning_plan_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("tuning_plan_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "status": run_meta.get("status"),
+        "proposal_count": run_meta.get("proposal_count"),
+        "blocked": run_meta.get("blocked"),
+        "reasons": run_meta.get("reasons"),
+    }
+    runs.append(entry)
+    index["tuning_plan_runs"] = runs
+    index["latest_tuning_plan_run_id"] = run_meta.get("run_id")
     return index
 
 
