@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ingestion.live_io import live_io_metrics_snapshot, live_writes_allowed, reset_metrics
-from guardrails.live_io_guardrails import evaluate as evaluate_live_io_guardrails
+from guardrails.live_io_guardrails import evaluate as evaluate_live_io_guardrails, get_policy_from_env
 from pipeline.shadow_pipeline import run_shadow_pipeline
 from policy.policy_store import stable_json_dumps
 from repositories.raw_payload_repo import RawPayloadRepository
@@ -153,7 +153,7 @@ async def run_shadow_batch(
     }
 
     live_io_metrics = live_io_metrics_snapshot()
-    live_io_alerts = evaluate_live_io_guardrails(live_io_metrics, policy=None)
+    live_io_alerts = evaluate_live_io_guardrails(live_io_metrics, policy=get_policy_from_env())
 
     result: Dict[str, Any] = {
         "run_meta": run_meta,

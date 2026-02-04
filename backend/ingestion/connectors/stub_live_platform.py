@@ -1,11 +1,13 @@
 """
 Stub live platform connector: fetches from local dev stub server.
 LIVE connector (recorded-first policy applies). Fails fast if LIVE_IO_ALLOWED is not set.
-Outputs normalized IngestedMatchData using existing ingestion schema.
+Supports STUB_LIVE_MODE (ok|timeout|500|rate_limit|slow) for deterministic failure drills.
 """
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from urllib.parse import urljoin
@@ -13,6 +15,36 @@ from urllib.parse import urljoin
 import httpx
 
 from ingestion.connectors.platform_base import DataConnector, IngestedMatchData, MatchIdentity
+from ingestion.live_io import (
+    LiveIOCircuitOpenError,
+    LiveIOFailureError,
+    LiveIORateLimitedError,
+    LiveIOTimeoutError,
+    circuit_breaker_allow_request,
+    circuit_breaker_record_failure,
+    circuit_breaker_record_success,
+    live_io_allowed,
+    record_request,
+)
+
+
+def _stub_mode() -> str:
+    """Stub mode from env (default ok). Explicit and stable for drills."""
+    m = (os.environ.get("STUB_LIVE_MODE") or "ok").strip().lower()
+    if m not in ("ok", "timeout", "500", "rate_limit", "slow"):
+        return "ok"
+    return m
+
+
+def _timeout_seconds() -> float:
+    """Request timeout; small for failure drills when env set."""
+    try:
+        v = os.environ.get("LIVE_IO_TIMEOUT_SECONDS")
+        if v is not None and v.strip():
+            return float(v.strip())
+    except ValueError:
+        pass
+    return 5.0
 
 
 def _normalize_kickoff_utc(value: str) -> str:
@@ -52,36 +84,70 @@ def _parse_odds_1x2(raw: Any) -> Dict[str, float]:
 class StubLivePlatformAdapter(DataConnector):
     """
     LIVE connector: fetches from local dev stub server.
-    Not a RecordedPlatformAdapter; requires LIVE_IO_ALLOWED=true (get_connector_safe returns None otherwise).
-    Fails fast if used without LIVE_IO_ALLOWED (e.g. direct get_connector bypass).
+    Not a RecordedPlatformAdapter; requires LIVE_IO_ALLOWED=true.
+    STUB_LIVE_MODE (ok|timeout|500|rate_limit|slow) and LIVE_IO_TIMEOUT_SECONDS for drills.
     """
 
     def __init__(self, base_url: str | None = None) -> None:
         base_url = base_url or "http://localhost:8001"
         self._base_url = str(base_url).rstrip("/")
-        self._client = httpx.Client(base_url=self._base_url, timeout=5.0)
+        self._timeout = _timeout_seconds()
+        self._client = httpx.Client(base_url=self._base_url, timeout=self._timeout)
 
     @property
     def name(self) -> str:
         return "stub_live_platform"
 
     def _require_live_io(self) -> None:
-        """Fail fast if LIVE_IO_ALLOWED is not enabled."""
         from ingestion.live_io import live_io_allowed
         if not live_io_allowed():
             raise RuntimeError("stub_live_platform is a LIVE connector; set LIVE_IO_ALLOWED=true to use it")
 
     def _get(self, path: str) -> Any:
+        if not circuit_breaker_allow_request():
+            record_request(success=False, latency_ms=0.0, circuit_open=True)
+            raise LiveIOCircuitOpenError("Circuit open")
+        mode = _stub_mode()
         url = urljoin(self._base_url + "/", path.lstrip("/"))
+        if "?" in url:
+            url = f"{url}&mode={mode}"
+        else:
+            url = f"{url}?mode={mode}"
+        t0 = time.perf_counter()
         try:
-            r = self._client.get(url)
+            r = self._client.get(url, timeout=self._timeout)
+            latency_ms = (time.perf_counter() - t0) * 1000
+            if r.status_code == 429:
+                record_request(success=False, latency_ms=latency_ms, rate_limited=True)
+                circuit_breaker_record_failure()
+                raise LiveIORateLimitedError(f"429 Rate Limited: {r.text}")
+            if r.status_code >= 500:
+                record_request(success=False, latency_ms=latency_ms)
+                circuit_breaker_record_failure()
+                raise LiveIOFailureError(f"HTTP {r.status_code}: {r.text}")
             r.raise_for_status()
+            record_request(success=True, latency_ms=latency_ms)
+            circuit_breaker_record_success()
             return r.json()
+        except httpx.TimeoutException as e:
+            latency_ms = (time.perf_counter() - t0) * 1000
+            record_request(success=False, latency_ms=latency_ms, timeout=True)
+            circuit_breaker_record_failure()
+            raise LiveIOTimeoutError("Request timed out") from e
+        except (LiveIORateLimitedError, LiveIOFailureError, LiveIOTimeoutError, LiveIOCircuitOpenError):
+            raise
         except httpx.HTTPStatusError as e:
+            latency_ms = (time.perf_counter() - t0) * 1000
             if e.response.status_code == 404:
+                record_request(success=False, latency_ms=latency_ms)
                 return None
+            record_request(success=False, latency_ms=latency_ms)
+            circuit_breaker_record_failure()
             raise ValueError(f"HTTP {e.response.status_code}: {e.response.text}") from e
         except httpx.RequestError as e:
+            latency_ms = (time.perf_counter() - t0) * 1000
+            record_request(success=False, latency_ms=latency_ms)
+            circuit_breaker_record_failure()
             raise ValueError(f"Request failed: {e!s}") from e
 
     def fetch_matches(self) -> List[MatchIdentity]:

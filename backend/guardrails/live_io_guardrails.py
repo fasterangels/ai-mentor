@@ -22,6 +22,33 @@ DEFAULT_POLICY: Dict[str, Any] = {
 }
 
 
+def get_policy_from_env() -> Dict[str, Any]:
+    """
+    Build policy from env for testability (e.g. LIVE_IO_MAX_TIMEOUTS, LIVE_IO_MAX_P95_MS).
+    Use in tests to set small timeouts and low retry caps for failure drills.
+    """
+    policy = dict(DEFAULT_POLICY)
+    try:
+        v = os.environ.get("LIVE_IO_MAX_TIMEOUTS")
+        if v is not None and v.strip():
+            policy["max_timeouts_per_run"] = int(v.strip())
+    except ValueError:
+        pass
+    try:
+        v = os.environ.get("LIVE_IO_MAX_P95_MS")
+        if v is not None and v.strip():
+            policy["max_p95_latency_ms"] = float(v.strip())
+    except ValueError:
+        pass
+    try:
+        v = os.environ.get("LIVE_IO_MAX_RATE_LIMITED")
+        if v is not None and v.strip():
+            policy["max_rate_limited_per_run"] = int(v.strip())
+    except ValueError:
+        pass
+    return policy
+
+
 def evaluate(metrics: Dict[str, Any], policy: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     """
     Evaluate guardrails on live IO metrics. Returns list of alerts:
