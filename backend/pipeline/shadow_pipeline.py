@@ -60,9 +60,9 @@ async def run_shadow_pipeline(
 
     evidence_pack: Optional[EvidencePack] = None
 
-    if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
-        # Recorded fixtures (sample_platform) or live stubs (stub_platform/stub_live_platform) via get_connector_safe
-        # Live connectors require LIVE_IO_ALLOWED=true (enforced via live_io wrapper)
+    if connector_name in ("sample_platform", "stub_platform", "stub_live_platform", "real_provider"):
+        # Recorded fixtures or live stubs/real_provider via get_connector_safe
+        # Live connectors require LIVE_IO_ALLOWED (and for real_provider, REAL_PROVIDER_LIVE) when using live path
         import time
         from ingestion.live_io import get_connector_safe, record_request
         from ingestion.evidence_builder import ingested_to_evidence_pack
@@ -70,7 +70,7 @@ async def run_shadow_pipeline(
         adapter = get_connector_safe(connector_name)
         if not adapter:
             return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
-        # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)
+        # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform/real_provider recorded path)
         if connector_name in ("stub_platform", "stub_live_platform"):
             t0 = time.perf_counter()
         ingested = adapter.fetch_match_data(match_id)
@@ -79,7 +79,7 @@ async def run_shadow_pipeline(
             record_request(success=ingested is not None, latency_ms=latency_ms)
         if not ingested:
             return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
-        # Reuse same ensure logic for both connectors (same ingested data structure)
+        # Reuse same ensure logic for all (same ingested data structure)
         await _ensure_sample_platform_match(session, ingested, now)
         evidence_pack = ingested_to_evidence_pack(ingested, captured_at_utc=now)
     else:

@@ -8,11 +8,13 @@ from ingestion.connectors.platform_base import DataConnector
 from ingestion.connectors.sample_platform import SamplePlatformAdapter
 from ingestion.connectors.stub_platform import StubPlatformAdapter
 from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+from ingestion.connectors.real_provider import RealProviderAdapter
 
 _REGISTRY: Dict[str, DataConnector] = {
     "sample_platform": SamplePlatformAdapter(),
     "stub_platform": StubPlatformAdapter(),
     "stub_live_platform": StubLivePlatformAdapter(),
+    "real_provider": RealProviderAdapter(),
 }
 
 
