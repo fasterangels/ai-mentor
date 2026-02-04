@@ -1,4 +1,4 @@
-"""GET /api/v1/reports/live-shadow/latest, POST /api/v1/reports/live-shadow/run, GET /api/v1/reports/live-shadow-analyze/latest, POST /api/v1/reports/live-shadow-analyze/run."""
+"""GET /api/v1/reports/live-shadow/latest, POST /api/v1/reports/live-shadow/run, GET /api/v1/reports/live-shadow-analyze/latest, POST /api/v1/reports/live-shadow-analyze/run, GET /api/v1/reports/activation/latest."""
 
 from __future__ import annotations
 
@@ -122,5 +122,36 @@ def live_shadow_analyze_latest(index_path: str | None = None) -> dict:
         "matches_count": entry.get("matches_count"),
         "summary": entry.get("summary"),
         "alerts_count": entry.get("alerts_count"),
+        "runs_count": len(runs),
+    }
+
+
+@router.get(
+    "/activation/latest",
+    summary="Latest activation run summary",
+    response_description="Summary of latest activation run from reports/index.json (read-only, no DB).",
+)
+def activation_latest(index_path: str | None = None) -> dict:
+    """
+    Return the latest activation run summary from reports/index.json.
+    Does not require database; reads only the index file.
+    """
+    path = Path(index_path or INDEX_PATH)
+    index = load_index(path)
+    latest_id = index.get("latest_activation_run_id")
+    runs = index.get("activation_runs") or []
+    if not latest_id or not runs:
+        return {"latest_run_id": None, "summary": None, "runs_count": len(runs)}
+    entry = next((r for r in reversed(runs) if r.get("run_id") == latest_id), None)
+    if not entry:
+        return {"latest_run_id": latest_id, "summary": None, "runs_count": len(runs)}
+    return {
+        "latest_run_id": latest_id,
+        "created_at_utc": entry.get("created_at_utc"),
+        "connector_name": entry.get("connector_name"),
+        "matches_count": entry.get("matches_count"),
+        "activated": entry.get("activated", False),
+        "reason": entry.get("reason"),
+        "activation_summary": entry.get("activation_summary", {}),
         "runs_count": len(runs),
     }
