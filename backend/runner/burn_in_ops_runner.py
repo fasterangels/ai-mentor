@@ -1,6 +1,9 @@
 """
 Burn-in ops: single pipeline ingestion -> live shadow compare -> live shadow analyze -> (optional) burn-in activation.
 Writes one consolidated report bundle under reports/burn_in/<run_id>/ and updates index.
+
+Executable from backend dir: python -m runner.burn_in_ops_runner [--output-dir reports] [--connector NAME] [--dry-run] [--activation]
+Always creates reports/index.json (and bundle when connector available or error stub when not).
 """
 
 from __future__ import annotations
@@ -265,3 +268,58 @@ async def run_burn_in_ops(
 
     bundle["_bundle_dir"] = str(bundle_dir)
     return bundle
+
+
+def _main() -> int:
+    """CLI entrypoint when run as python -m runner.burn_in_ops_runner (run from backend dir)."""
+    import argparse
+    import asyncio
+    import sys
+
+    parser = argparse.ArgumentParser(description="Burn-in ops: ingestion -> compare -> analyze -> (optional) activation")
+    parser.add_argument("--connector", default="stub_live_platform", help="Connector name")
+    parser.add_argument("--dry-run", action="store_true", help="Skip activation only; bundle and index are still written")
+    parser.add_argument("--activation", action="store_true", help="Enable burn-in activation if gates pass")
+    parser.add_argument("--output-dir", default="reports", help="Reports directory (default: reports)")
+    parser.add_argument("--max-bundles", type=int, default=30, help="Max burn-in bundles to retain")
+    parser.add_argument("--match-ids", default=None, help="Comma-separated match IDs (default: from connector)")
+    args = parser.parse_args()
+
+    match_ids = None
+    if getattr(args, "match_ids", None):
+        match_ids = [m.strip() for m in args.match_ids.split(",") if m.strip()]
+
+    async def _run() -> int:
+        import models  # noqa: F401
+        from core.config import get_settings
+        from core.database import init_database, dispose_database, get_database_manager
+
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_burn_in_ops(
+                    session,
+                    connector_name=args.connector,
+                    match_ids=match_ids,
+                    enable_activation=args.activation,
+                    dry_run=args.dry_run,
+                    reports_dir=args.output_dir,
+                    index_path=Path(args.output_dir) / "index.json",
+                    max_bundles_retained=args.max_bundles,
+                )
+        finally:
+            await dispose_database()
+
+        if result.get("error"):
+            print(result.get("detail", result.get("error")), file=sys.stderr)
+            return 1
+        print(f"{result.get('run_id')},{result.get('status')},{result.get('alerts_count', 0)},{result.get('activated', False)},{result.get('_bundle_dir', '')}")
+        return 0
+
+    return asyncio.run(_run())
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_main())

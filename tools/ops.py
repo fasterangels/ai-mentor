@@ -155,7 +155,7 @@ def main() -> int:
     burn_in = sub.add_parser("burn-in-run", help="Run ingestion -> compare -> analyze -> (optional) activation; write bundle and update index.")
     burn_in.add_argument("--connector", default="stub_live_platform", help="Connector name")
     burn_in.add_argument("--match-ids", default=None, help="Comma-separated match IDs (default: from connector)")
-    burn_in.add_argument("--dry-run", action="store_true", help="Do not write bundle or index (default: False)")
+    burn_in.add_argument("--dry-run", action="store_true", help="Skip activation only; bundle and index are still written (default: False)")
     burn_in.add_argument("--activation", action="store_true", help="Enable burn-in activation if gates pass")
     burn_in.add_argument("--output-dir", default="reports", help="Reports directory")
     burn_in.add_argument("--max-bundles", type=int, default=30, help="Max burn-in bundles to retain")

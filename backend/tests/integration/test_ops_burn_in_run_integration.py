@@ -5,6 +5,8 @@ Integration test: run ops burn-in-run against stub_live_platform; assert report 
 from __future__ import annotations
 
 import asyncio
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -189,3 +191,25 @@ async def test_ops_burn_in_dry_run_still_writes_reports(test_db, stub_client, tm
         finally:
             if original:
                 register_connector("stub_live_platform", original)
+
+
+def test_ops_burn_in_entrypoint_creates_index_json(tmp_path) -> None:
+    """Running python -m runner.burn_in_ops_runner creates reports/index.json (even when LIVE_IO_ALLOWED=0)."""
+    reports_dir = tmp_path / "reports"
+    env = os.environ.copy()
+    env["LIVE_IO_ALLOWED"] = "0"
+    env["ACTIVATION_ENABLED"] = "0"
+    proc = subprocess.run(
+        [sys.executable, "-m", "runner.burn_in_ops_runner", "--output-dir", str(reports_dir)],
+        cwd=str(_backend),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert proc.returncode in (0, 1), f"stderr: {proc.stderr!r}"
+    index_path = reports_dir / "index.json"
+    assert index_path.exists(), f"reports/index.json must be created by entrypoint. stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    index = load_index(index_path)
+    assert "burn_in_ops_runs" in index
+    assert len(index["burn_in_ops_runs"]) >= 1, "index must record at least one run (error run when connector unavailable)"
