@@ -8,4 +8,4 @@ python-multipart==0.0.6
 aiofiles==23.2.1
 pytest>=7.0.0
 # For packaging/windows_service (ai-mentor-service.exe)
-pywin32>=306
+pywin32>=306; platform_system == "Windows"
