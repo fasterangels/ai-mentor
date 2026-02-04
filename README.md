@@ -193,6 +193,29 @@ TOP_P=0.9                       # Nucleus sampling threshold
 
 ---
 
+## Live shadow compare (LIVE_SHADOW_COMPARE)
+
+**LIVE_SHADOW_COMPARE** is a run mode that compares live ingestion to recorded fixtures (normalization only, no decisions, no writes by default).
+
+### Behavior
+
+- **No analyzer:** The pipeline runs normalization only; no picks or decisions are produced.
+- **No writes by default:** Report and index updates are written only if `LIVE_WRITES_ALLOWED=true` (default: false). Cache and DB writes are hard-blocked in this mode unless that flag is set.
+
+### How to run safely
+
+1. **Required env (for live path):**  
+   - `LIVE_IO_ALLOWED=true`  
+   - For **real_provider**: `REAL_PROVIDER_LIVE=true`, `REAL_PROVIDER_BASE_URL`, `REAL_PROVIDER_API_KEY`
+2. **Optional:** `LIVE_WRITES_ALLOWED=true` to persist the compare report and append its summary to `reports/index.json`.
+3. **API:**  
+   - `POST /api/v1/reports/live-shadow/run` with body `{"connector_name": "real_provider"}` (or another connector that supports live + recorded).  
+   - `GET /api/v1/reports/live-shadow/latest` returns the latest compare summary from `reports/index.json` (read-only, no DB).
+
+Reports are stored under `reports/live_shadow_compare/<run_id>.json`; the index is updated only when writes are allowed.
+
+---
+
 ## 📊 Performance Metrics
 
 Access real-time performance data:
