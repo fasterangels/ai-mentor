@@ -68,3 +68,7 @@ logs/
 # CI E2E artifacts (folder kept via packaging/artifacts/.gitkeep)
 packaging/artifacts/e2e_stdout.txt
 packaging/artifacts/backend.log
+
+# Operational reports (reports/ directory tracked via reports/.gitkeep)
+reports/shadow_batch_*.json
+reports/index.json
