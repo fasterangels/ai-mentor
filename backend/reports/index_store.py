@@ -36,6 +36,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_burn_in_run_id": None,
             "provider_parity_runs": [],
             "latest_provider_parity_run_id": None,
+            "quality_audit_runs": [],
+            "latest_quality_audit_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -54,6 +56,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_burn_in_run_id": None,
             "provider_parity_runs": [],
             "latest_provider_parity_run_id": None,
+            "quality_audit_runs": [],
+            "latest_quality_audit_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -73,6 +77,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     provider_parity_runs = data.get("provider_parity_runs")
     if not isinstance(provider_parity_runs, list):
         provider_parity_runs = []
+    quality_audit_runs = data.get("quality_audit_runs")
+    if not isinstance(quality_audit_runs, list):
+        quality_audit_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -86,6 +93,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "latest_burn_in_run_id": data.get("latest_burn_in_run_id"),
         "provider_parity_runs": provider_parity_runs,
         "latest_provider_parity_run_id": data.get("latest_provider_parity_run_id"),
+        "quality_audit_runs": quality_audit_runs,
+        "latest_quality_audit_run_id": data.get("latest_quality_audit_run_id"),
     }
 
 
@@ -217,6 +226,24 @@ def append_provider_parity_run(index: Dict[str, Any], run_meta: Dict[str, Any]) 
     runs.append(entry)
     index["provider_parity_runs"] = runs
     index["latest_provider_parity_run_id"] = run_meta.get("run_id")
+    return index
+
+
+def append_quality_audit_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Append a quality audit run. run_meta: run_id, created_at_utc, run_count, summary (dict).
+    Sets latest_quality_audit_run_id. Returns updated index.
+    """
+    runs: List[Dict[str, Any]] = index.get("quality_audit_runs") or []
+    entry = {
+        "run_id": run_meta.get("run_id"),
+        "created_at_utc": run_meta.get("created_at_utc"),
+        "run_count": run_meta.get("run_count"),
+        "summary": run_meta.get("summary"),
+    }
+    runs.append(entry)
+    index["quality_audit_runs"] = runs
+    index["latest_quality_audit_run_id"] = run_meta.get("run_id")
     return index
 
 

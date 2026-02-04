@@ -236,6 +236,26 @@ Alerts are **shadow-only** (no blocking); use them to triage and fix data or con
 
 ---
 
+### Decision quality audit (quality-audit)
+
+The **quality-audit** CLI produces deep-audit reports from stored snapshots and resolutions: reason effectiveness over time (with configurable decay), reason churn, confidence calibration by band per market, and stability (pick flip rate, confidence volatility). Use these for **shadow tuning** only; suggestions do not change policy automatically.
+
+**How to run**
+
+- From repo root: `python tools/quality_audit.py [--last-n N] [--date-from ISO] [--date-to ISO] [--output-dir reports]`
+- Requires DB with analysis_runs, snapshot_resolutions, and predictions (e.g. after shadow/analyze runs).
+- Output: `reports/quality_audit/<run_id>.json` and an entry in `reports/index.json` under `quality_audit_runs` / `latest_quality_audit_run_id`.
+
+**How to use the outputs**
+
+- **reason_effectiveness_over_time:** Per-reason win/loss/neutral and decay-weighted contribution. Use to spot reasons whose effectiveness degrades (see suggestions).
+- **reason_churn:** Appearance/disappearance of reason codes across runs; high churn may indicate instability.
+- **confidence_calibration:** Per market and band, predicted confidence vs empirical accuracy. Use to tune bands or thresholds.
+- **stability:** Pick flip rate and confidence volatility (p95 delta) across comparable snapshots.
+- **suggestions:** Dampening candidates (reasons to consider down-weighting) and confidence band adjustments. These are **suggestions only**; no automatic policy change.
+
+---
+
 ## 📊 Performance Metrics
 
 Access real-time performance data:
