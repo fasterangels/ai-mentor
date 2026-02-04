@@ -213,3 +213,31 @@ def test_ops_burn_in_entrypoint_creates_index_json(tmp_path) -> None:
     index = load_index(index_path)
     assert "burn_in_ops_runs" in index
     assert len(index["burn_in_ops_runs"]) >= 1, "index must record at least one run (error run when connector unavailable)"
+
+
+def test_backend_entry_ops_burn_in_run_creates_index_json(tmp_path) -> None:
+    """python backend_entry.py --ops burn-in-run creates reports/index.json (canonical command)."""
+    backend_entry = _backend / "backend_entry.py"
+    assert backend_entry.exists(), "backend_entry.py must exist"
+    env = os.environ.copy()
+    env["LIVE_IO_ALLOWED"] = "0"
+    env["ACTIVATION_ENABLED"] = "0"
+    env["REPORTS_DIR"] = str(tmp_path / "reports")
+    env["PYTHONPATH"] = str(_backend)
+    proc = subprocess.run(
+        [sys.executable, str(backend_entry), "--ops", "burn-in-run"],
+        cwd=str(_backend),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert proc.returncode in (0, 1), f"stderr: {proc.stderr!r}"
+    index_path = tmp_path / "reports" / "index.json"
+    assert index_path.exists(), (
+        f"reports/index.json must be created by backend_entry.py --ops burn-in-run. "
+        f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    )
+    index = load_index(index_path)
+    assert "burn_in_ops_runs" in index
+    assert len(index["burn_in_ops_runs"]) >= 1, "index must be non-empty after run"
