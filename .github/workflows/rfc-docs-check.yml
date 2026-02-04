@@ -1,0 +1,32 @@
+# Ensure docs/rfc/ contains only Markdown files (no code paths affected).
+name: rfc-docs-check
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/rfc/**']
+  pull_request:
+    branches: [main]
+    paths: ['docs/rfc/**']
+
+jobs:
+  rfc-markdown:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: RFC files must be markdown
+        run: |
+          set -e
+          if [ ! -d docs/rfc ]; then
+            echo "docs/rfc/ not found"
+            exit 1
+          fi
+          non_md=$(find docs/rfc -type f ! -name '*.md' 2>/dev/null || true)
+          if [ -n "$non_md" ]; then
+            echo "ERROR: All files in docs/rfc/ must be .md. Non-markdown files:"
+            echo "$non_md"
+            exit 1
+          fi
+          echo "All RFC files are markdown"
