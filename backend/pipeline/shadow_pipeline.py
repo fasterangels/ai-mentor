@@ -45,6 +45,7 @@ async def run_shadow_pipeline(
     dry_run: bool = False,
     hard_block_persistence: bool = False,
     activation: bool = False,
+    allow_activation_for_this_match: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Run full shadow pipeline: pipeline -> analyze -> attach -> eval -> tune -> audit.
@@ -52,6 +53,7 @@ async def run_shadow_pipeline(
     If dry_run=True, do not persist SnapshotResolution and do not write cache; still compute reports/checksums.
     If hard_block_persistence=True, skip ALL DB writes (AnalysisRun, Prediction, SnapshotResolution, cache).
     If activation=True, check activation gate and only persist if allowed (still requires env gates).
+    If allow_activation_for_this_match is False (rollout/daily cap), do not persist even if gate passes.
     """
     from models.analysis_run import AnalysisRun
     from models.prediction import Prediction
@@ -125,24 +127,41 @@ async def run_shadow_pipeline(
     activation_audits: List[Dict[str, Any]] = []
     activation_allowed_for_match = False
     from activation.audit import create_activation_audit
-    
+
     decisions_list = analyzer_payload.get("decisions") or []
+    # Rollout/daily cap: if explicitly False, do not allow activation for this match
+    if allow_activation_for_this_match is False and activation:
+        activation_allowed_for_match = False
+        for dec in decisions_list:
+            audit = await create_activation_audit(
+                session=session,
+                connector_name=connector_name,
+                match_id=match_id,
+                market=dec.get("market") or "",
+                decision=dec,
+                confidence=float(dec.get("confidence") or 0.0),
+                reasons=dec.get("reasons") or [],
+                activation_allowed=False,
+                activation_reason="rollout or daily cap limited",
+                now_utc=now,
+            )
+            activation_audits.append(audit)
     # If activation is requested, check gates; otherwise all decisions are shadow-only
-    if activation and not hard_block_persistence and not dry_run:
+    elif activation and not hard_block_persistence and not dry_run:
         from activation.gate import check_activation_gate
-        
+
         for dec in decisions_list:
             market = dec.get("market") or ""
             confidence = float(dec.get("confidence") or 0.0)
             reasons = dec.get("reasons") or []
-            
+
             allowed, reason = check_activation_gate(
                 connector_name=connector_name,
                 market=market,
                 confidence=confidence,
                 policy_min_confidence=min_conf,
             )
-            
+
             audit = await create_activation_audit(
                 session=session,
                 connector_name=connector_name,
@@ -156,7 +175,7 @@ async def run_shadow_pipeline(
                 now_utc=now,
             )
             activation_audits.append(audit)
-            
+
             if allowed:
                 activation_allowed_for_match = True
     else:

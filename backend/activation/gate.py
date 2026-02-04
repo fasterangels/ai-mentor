@@ -22,8 +22,14 @@ def _activation_enabled() -> bool:
 
 
 def _activation_mode() -> str:
-    """Get activation mode: 'limited' or 'burn_in' for activation."""
+    """Get activation mode: 'limited', 'burn_in', or 'expanded' for activation."""
     return os.environ.get("ACTIVATION_MODE", "").strip().lower()
+
+
+def _activation_tier() -> str:
+    """ACTIVATION_TIER: burn_in, limited, expanded. Default burn_in."""
+    from activation.tiers import _tier
+    return _tier()
 
 
 def _live_writes_allowed() -> bool:
@@ -48,19 +54,16 @@ def _activation_markets() -> Set[str]:
 
 
 def _activation_max_matches() -> int:
-    """Get max matches per run allowed for activation (default: 0 = disabled)."""
-    try:
-        return int(os.environ.get("ACTIVATION_MAX_MATCHES", "0"))
-    except ValueError:
-        return 0
+    """Get max matches per run; capped by tier and ACTIVATION_MAX_MATCHES_HARD_CAP."""
+    from activation.tiers import tier_max_matches
+    # Use activation mode as effective tier for caps (limited/expanded get env cap, burn_in gets 1-3)
+    return tier_max_matches(_activation_mode())
 
 
 def _activation_min_confidence() -> float:
-    """Get additional minimum confidence threshold for activation (stricter than policy)."""
-    try:
-        return float(os.environ.get("ACTIVATION_MIN_CONFIDENCE", "0.0"))
-    except ValueError:
-        return 0.0
+    """Get tier-specific minimum confidence for activation (stricter than policy when set)."""
+    from activation.tiers import tier_min_confidence
+    return tier_min_confidence(_activation_mode())
 
 
 def _check_readiness() -> tuple[bool, Optional[str]]:
@@ -130,8 +133,8 @@ def check_activation_gate(
         return False, "ACTIVATION_ENABLED is not set"
     
     mode = _activation_mode()
-    if mode not in ("limited", "burn_in"):
-        return False, f"ACTIVATION_MODE must be 'limited' or 'burn_in' (got '{mode}')"
+    if mode not in ("limited", "burn_in", "expanded"):
+        return False, f"ACTIVATION_MODE must be 'limited', 'burn_in', or 'expanded' (got '{mode}')"
     
     if not _live_writes_allowed():
         return False, "LIVE_WRITES_ALLOWED is not set"
@@ -208,8 +211,8 @@ def check_activation_gate_batch(
         return False, "ACTIVATION_ENABLED is not set"
     
     mode = _activation_mode()
-    if mode not in ("limited", "burn_in"):
-        return False, f"ACTIVATION_MODE must be 'limited' or 'burn_in' (got '{mode}')"
+    if mode not in ("limited", "burn_in", "expanded"):
+        return False, f"ACTIVATION_MODE must be 'limited', 'burn_in', or 'expanded' (got '{mode}')"
     
     if not _live_writes_allowed():
         return False, "LIVE_WRITES_ALLOWED is not set"
@@ -235,10 +238,12 @@ def check_activation_gate_batch(
     if allowed_connectors and connector_name not in allowed_connectors:
         return False, f"Connector '{connector_name}' not in ACTIVATION_CONNECTORS whitelist"
     
-    # 4. Max matches limit
+    # 4. Max matches limit (tier-capped, hard cap 10)
     max_matches = _activation_max_matches()
-    if max_matches > 0 and match_count > max_matches:
-        return False, f"Match count {match_count} exceeds ACTIVATION_MAX_MATCHES={max_matches}"
+    if max_matches <= 0:
+        return False, "ACTIVATION_MAX_MATCHES not set or 0 (required for limited/expanded)"
+    if match_count > max_matches:
+        return False, f"Match count {match_count} exceeds tier cap ACTIVATION_MAX_MATCHES={max_matches}"
     
     # 5. Readiness checks
     ready, reason = _check_readiness()
@@ -259,12 +264,20 @@ def get_activation_config() -> Dict[str, Any]:
         "kill_switch_active": _kill_switch_active(),
         "activation_enabled": _activation_enabled(),
         "activation_mode": _activation_mode(),
+        "activation_tier": _activation_tier(),
         "live_writes_allowed": _live_writes_allowed(),
         "allowed_connectors": list(_activation_connectors()),
         "allowed_markets": list(_activation_markets()),
         "max_matches": _activation_max_matches(),
         "activation_min_confidence": _activation_min_confidence(),
     }
+    try:
+        from activation.tiers import get_tier_config, _rollout_pct, _daily_max_activations
+        config["tier_config"] = get_tier_config()
+        config["rollout_pct"] = _rollout_pct()
+        config["daily_max_activations"] = _daily_max_activations()
+    except Exception:  # noqa: BLE001
+        pass
     if _activation_mode() == "burn_in":
         from activation.burn_in import get_burn_in_config
         config["burn_in"] = get_burn_in_config()

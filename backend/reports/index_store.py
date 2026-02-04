@@ -189,7 +189,8 @@ def append_live_shadow_analyze_run(index: Dict[str, Any], run_meta: Dict[str, An
 def append_activation_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any]:
     """
     Append an activation run entry. run_meta: run_id, created_at_utc, connector_name,
-    matches_count, activated (bool), reason (str or None), activation_summary (dict).
+    matches_count, activated (bool), reason (str or None), activation_summary (dict),
+    activated_count (optional, for daily cap).
     Sets latest_activation_run_id. Returns updated index.
     """
     runs: List[Dict[str, Any]] = index.get("activation_runs") or []
@@ -202,6 +203,8 @@ def append_activation_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Di
         "reason": run_meta.get("reason"),
         "activation_summary": run_meta.get("activation_summary", {}),
     }
+    if run_meta.get("activated_count") is not None:
+        entry["activated_count"] = run_meta["activated_count"]
     runs.append(entry)
     index["activation_runs"] = runs
     index["latest_activation_run_id"] = run_meta.get("run_id")
@@ -285,6 +288,8 @@ def append_burn_in_ops_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> D
         "matches_count": run_meta.get("matches_count"),
         "connector_name": run_meta.get("connector_name"),
     }
+    if run_meta.get("activated_count") is not None:
+        entry["activated_count"] = run_meta["activated_count"]
     runs.append(entry)
     index["burn_in_ops_runs"] = runs
     index["latest_burn_in_ops_run_id"] = run_meta.get("run_id")

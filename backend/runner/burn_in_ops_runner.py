@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ingestion.live_io import get_connector_safe
-from reports.index_store import append_burn_in_ops_run, load_index, save_index
+from reports.index_store import append_burn_in_ops_run, append_activation_run, load_index, save_index
 from limits.limits import prune_burn_in_ops_bundles
 
 BURN_IN_OPS_SUBDIR = "burn_in"
@@ -123,6 +123,7 @@ async def run_burn_in_ops(
     # 3) Optional burn-in activation (shadow batch with activation=True)
     batch_report: Dict[str, Any] = {}
     activated = False
+    activated_count = 0
     if enable_activation and not dry_run:
         from runner.shadow_runner import run_shadow_batch
         batch_report = await run_shadow_batch(
@@ -130,9 +131,12 @@ async def run_burn_in_ops(
             connector_name=connector_name,
             match_ids=match_ids,
             activation=True,
+            index_path=index_path,
         )
         if not batch_report.get("error"):
-            activated = batch_report.get("activation", {}).get("activated", False)
+            act = batch_report.get("activation") or {}
+            activated = act.get("activated", False)
+            activated_count = int(act.get("activated_count", 0))
 
     alerts_count = 0
     for r in (compare_report, analyze_report):
@@ -177,9 +181,21 @@ async def run_burn_in_ops(
             "status": status,
             "alerts_count": alerts_count,
             "activated": activated,
+            "activated_count": activated_count,
             "matches_count": len(match_ids),
             "connector_name": connector_name,
         })
+        if activated and activated_count > 0:
+            append_activation_run(index, {
+                "run_id": run_id,
+                "created_at_utc": created_at,
+                "connector_name": connector_name,
+                "matches_count": len(match_ids),
+                "activated": True,
+                "activated_count": activated_count,
+                "reason": None,
+                "activation_summary": (batch_report.get("activation") or {}),
+            })
         prune_burn_in_ops_bundles(reports_path / BURN_IN_OPS_SUBDIR, index, max_retained=max_bundles_retained)
         save_index(index, index_path)
 
