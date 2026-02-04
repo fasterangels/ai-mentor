@@ -254,6 +254,15 @@ The **quality-audit** CLI produces deep-audit reports from stored snapshots and 
 - **stability:** Pick flip rate and confidence volatility (p95 delta) across comparable snapshots.
 - **suggestions:** Dampening candidates (reasons to consider down-weighting) and confidence band adjustments. These are **suggestions only**; no automatic policy change.
 
+### Burn-in ops (stabilization, no scheduler)
+
+See **docs/runbook_burnin.md** for required env, cadence, and incident playbook.
+
+- **Single pipeline:** `python tools/ops.py burn-in-run [--connector NAME] [--dry-run] [--activation]`  
+  Runs: ingestion → live shadow compare → live shadow analyze → (optional) burn-in activation if gates pass. Writes one report bundle under `reports/burn_in/<run_id>/` and updates `reports/index.json` (status, alerts, activated, counts). Use `--dry-run` to skip writing bundle/index. Retention: configurable max bundles (default 30); pruning is deterministic and logged in index.
+- **Health check:** `python tools/ops.py health-check`  
+  Validates readiness, required tables, connector availability, policy presence. Exit code nonzero on failure.
+
 ---
 
 ## 📊 Performance Metrics
