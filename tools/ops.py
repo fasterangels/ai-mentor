@@ -134,7 +134,21 @@ def _cmd_plan_tuning(args: argparse.Namespace) -> int:
     return asyncio.run(_run())
 
 
+def _read_version() -> str:
+    """Read version from repo root VERSION file (ai-mentor --version)."""
+    version_file = Path(__file__).resolve().parent.parent / "VERSION"
+    if version_file.is_file():
+        try:
+            return version_file.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+        except OSError:
+            pass
+    return "0.0.0"
+
+
 def main() -> int:
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(_read_version())
+        return 0
     parser = argparse.ArgumentParser(prog="ops", description="Ops: burn-in-run, health-check")
     sub = parser.add_subparsers(dest="command", required=True)
 
