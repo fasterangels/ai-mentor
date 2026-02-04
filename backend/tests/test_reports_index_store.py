@@ -23,6 +23,14 @@ def test_load_index_missing_returns_empty(tmp_path: Path) -> None:
     assert index["latest_run_id"] is None
 
 
+def test_load_index_invalid_json_returns_empty(tmp_path: Path) -> None:
+    invalid_path = tmp_path / "index.json"
+    invalid_path.write_text("not valid json {", encoding="utf-8")
+    index = load_index(invalid_path)
+    assert index["runs"] == []
+    assert index["latest_run_id"] is None
+
+
 def test_append_run_updates_latest_run_id_and_persists_stable_json(tmp_path: Path) -> None:
     index_path = tmp_path / "index.json"
     index = load_index(index_path)

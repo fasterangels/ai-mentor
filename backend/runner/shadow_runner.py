@@ -52,11 +52,13 @@ async def run_shadow_batch(
     *,
     now_utc: Optional[datetime] = None,
     final_scores: Optional[Dict[str, Dict[str, int]]] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
     Run shadow pipeline for each match and collect a BatchReport.
     If match_ids is None, load all cached matches for connector_name from ingestion cache.
     final_scores: optional map match_id -> {"home": int, "away": int} for tests; else placeholder.
+    dry_run: if True, do not persist SnapshotResolution or write cache; still compute reports/checksums.
     """
     now = _normalize_utc(now_utc)
     final_scores = final_scores or {}
@@ -97,6 +99,7 @@ async def run_shadow_batch(
                 final_score=score,
                 status="FINAL",
                 now_utc=now,
+                dry_run=dry_run,
             )
         except Exception as e:  # noqa: BLE001
             failures.append({"match_id": match_id, "error": str(e)})
@@ -144,7 +147,7 @@ async def run_shadow_batch(
         "matches_count": len(match_ids),
     }
 
-    return {
+    result: Dict[str, Any] = {
         "run_meta": run_meta,
         "per_match": per_match,
         "aggregates": aggregates,
@@ -154,3 +157,6 @@ async def run_shadow_batch(
         },
         "failures": failures,
     }
+    if dry_run:
+        result["dry_run"] = True
+    return result

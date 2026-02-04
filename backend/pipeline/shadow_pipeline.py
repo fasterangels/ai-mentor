@@ -42,10 +42,12 @@ async def run_shadow_pipeline(
     status: str = "FINAL",
     *,
     now_utc: Optional[datetime] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
     Run full shadow pipeline: pipeline -> analyze -> attach -> eval -> tune -> audit.
     Returns PipelineReport. Does not apply policy.
+    If dry_run=True, do not persist SnapshotResolution and do not write cache; still compute reports/checksums.
     """
     from models.analysis_run import AnalysisRun
     from models.prediction import Prediction
@@ -66,7 +68,7 @@ async def run_shadow_pipeline(
         window_hours=72,
         force_refresh=False,
     )
-    pipeline_result = await run_pipeline(session, pipeline_input)
+    pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run)
     evidence_pack: Optional[EvidencePack] = pipeline_result.evidence_pack
     if not evidence_pack:
         return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack")
@@ -131,9 +133,9 @@ async def run_shadow_pipeline(
         )
         await pred_repo.create(pred)
 
-    # 4) Attach result (SnapshotResolution)
+    # 4) Attach result (SnapshotResolution); skip persist when dry_run
     resolution = await attach_result(
-        session, snapshot_id, match_id, home, away, status
+        session, snapshot_id, match_id, home, away, status, persist=not dry_run
     )
     market_outcomes = json.loads(resolution.market_outcomes_json) if isinstance(resolution.market_outcomes_json, str) else resolution.market_outcomes_json
 
@@ -163,7 +165,7 @@ async def run_shadow_pipeline(
                 "confidence": dec.get("confidence"),
             }
 
-    return {
+    report: Dict[str, Any] = {
         "ingestion": {
             "payload_checksum": payload_checksum,
             "collected_at": collected_at,
@@ -189,6 +191,9 @@ async def run_shadow_pipeline(
             "proposed_policy_checksum": audit_report["proposed_policy_checksum"],
         },
     }
+    if dry_run:
+        report["dry_run"] = True
+    return report
 
 
 async def _ensure_dummy_match(session: AsyncSession, match_id: str, kickoff: datetime) -> None:
