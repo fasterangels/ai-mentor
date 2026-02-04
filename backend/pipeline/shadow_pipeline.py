@@ -63,13 +63,20 @@ async def run_shadow_pipeline(
     if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
         # Recorded fixtures (sample_platform) or live stubs (stub_platform/stub_live_platform) via get_connector_safe
         # Live connectors require LIVE_IO_ALLOWED=true (enforced via live_io wrapper)
-        from ingestion.live_io import get_connector_safe
+        import time
+        from ingestion.live_io import get_connector_safe, record_request
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
         adapter = get_connector_safe(connector_name)
         if not adapter:
             return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
+        # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)
+        if connector_name in ("stub_platform", "stub_live_platform"):
+            t0 = time.perf_counter()
         ingested = adapter.fetch_match_data(match_id)
+        if connector_name in ("stub_platform", "stub_live_platform"):
+            latency_ms = (time.perf_counter() - t0) * 1000
+            record_request(success=ingested is not None, latency_ms=latency_ms)
         if not ingested:
             return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
         # Reuse same ensure logic for both connectors (same ingested data structure)

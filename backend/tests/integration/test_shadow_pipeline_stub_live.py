@@ -86,3 +86,42 @@ async def test_shadow_pipeline_stub_live_e2e_no_network(test_db, stub_client) ->
             adapter.close()
             if original is not None:
                 register_connector("stub_live_platform", original)
+
+
+@pytest.mark.asyncio
+async def test_shadow_batch_includes_live_io_metrics_and_alerts_empty_under_stub(test_db, stub_client) -> None:
+    """Shadow batch report includes live_io_metrics and live_io_alerts; under normal stub conditions alerts are empty."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("LIVE_IO_ALLOWED", "1")
+        adapter = StubLivePlatformAdapter()
+        def patched_get(path: str):
+            r = stub_client.get(path)
+            r.raise_for_status()
+            return r.json()
+        adapter._get = patched_get
+        from ingestion.registry import get_connector
+        from runner.shadow_runner import run_shadow_batch
+        original = get_connector("stub_live_platform")
+        try:
+            register_connector("stub_live_platform", adapter)
+            now = datetime(2025, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+            async with get_database_manager().session() as session:
+                report = await run_shadow_batch(
+                    session,
+                    connector_name="stub_live_platform",
+                    match_ids=["stub_live_001"],
+                    now_utc=now,
+                    dry_run=True,
+                )
+            assert report.get("error") is None
+            assert "live_io_metrics" in report
+            assert "counters" in report["live_io_metrics"]
+            assert "latency_ms" in report["live_io_metrics"]
+            assert report["live_io_metrics"]["counters"].get("requests_total", 0) >= 1
+            assert "live_io_alerts" in report
+            assert isinstance(report["live_io_alerts"], list)
+            assert len(report["live_io_alerts"]) == 0, "Under normal stub conditions live IO alerts should be empty"
+        finally:
+            adapter.close()
+            if original is not None:
+                register_connector("stub_live_platform", original)

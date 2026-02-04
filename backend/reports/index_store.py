@@ -40,7 +40,7 @@ def append_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any
     """
     Append a run entry to the index and set latest_run_id.
     run_meta must include: run_id, created_at_utc, connector_name, matches_count,
-    batch_output_checksum, alerts_count.
+    batch_output_checksum, alerts_count. May include live_io_alerts_count.
     Returns updated index (mutates and returns the same dict).
     """
     runs: List[Dict[str, Any]] = index.get("runs") or []
@@ -52,6 +52,8 @@ def append_run(index: Dict[str, Any], run_meta: Dict[str, Any]) -> Dict[str, Any
         "batch_output_checksum": run_meta.get("batch_output_checksum"),
         "alerts_count": run_meta.get("alerts_count"),
     }
+    if run_meta.get("live_io_alerts_count") is not None:
+        entry["live_io_alerts_count"] = run_meta["live_io_alerts_count"]
     runs.append(entry)
     index["runs"] = runs
     index["latest_run_id"] = run_meta.get("run_id")
