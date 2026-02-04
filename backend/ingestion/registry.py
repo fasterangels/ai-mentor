@@ -17,6 +17,11 @@ def get_connector(name: str) -> Optional[DataConnector]:
     return _REGISTRY.get(name)
 
 
+def list_registered_connectors() -> list[str]:
+    """Return sorted list of registered connector names (for CI and tooling)."""
+    return sorted(_REGISTRY.keys())
+
+
 def register_connector(name: str, adapter: DataConnector) -> None:
     """Register an adapter under name (for tests or extensions)."""
     _REGISTRY[name] = adapter
