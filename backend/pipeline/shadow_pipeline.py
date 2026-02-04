@@ -60,9 +60,9 @@ async def run_shadow_pipeline(
 
     evidence_pack: Optional[EvidencePack] = None
 
-    if connector_name in ("sample_platform", "stub_platform"):
-        # Recorded fixtures (sample_platform) or live stub (stub_platform) via connector
-        # stub_platform requires LIVE_IO_ALLOWED=true (enforced via live_io wrapper)
+    if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
+        # Recorded fixtures (sample_platform) or live stubs (stub_platform/stub_live_platform) via get_connector_safe
+        # Live connectors require LIVE_IO_ALLOWED=true (enforced via live_io wrapper)
         from ingestion.live_io import get_connector_safe
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
