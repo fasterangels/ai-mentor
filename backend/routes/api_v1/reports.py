@@ -1,20 +1,33 @@
-"""GET /api/v1/reports/live-shadow/latest, POST /api/v1/reports/live-shadow/run, GET /api/v1/reports/live-shadow-analyze/latest, POST /api/v1/reports/live-shadow-analyze/run, GET /api/v1/reports/activation/latest."""
+"""GET /api/v1/reports/live-shadow/latest, POST ...; GET /api/v1/reports/index, GET /api/v1/reports/item/{run_id}, GET /api/v1/reports/file (read-only viewer)."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
 from reports.index_store import load_index
+from reports.viewer_guard import (
+    check_reports_token,
+    get_reports_root,
+    safe_path_under_reports,
+)
 from runner.live_shadow_compare_runner import run_live_shadow_compare
 from runner.live_shadow_analyze_runner import run_live_shadow_analyze
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 INDEX_PATH = "reports/index.json"
+
+
+def _require_reports_token(x_reports_token: str | None = Header(None, alias="X-Reports-Token")) -> None:
+    """Dependency: if REPORTS_READ_TOKEN is set, require X-Reports-Token header to match; else allow."""
+    if not check_reports_token(x_reports_token):
+        raise HTTPException(status_code=401, detail="Reports access requires valid X-Reports-Token")
 
 
 @router.post(
@@ -155,3 +168,87 @@ def activation_latest(index_path: str | None = None) -> dict:
         "activation_summary": entry.get("activation_summary", {}),
         "runs_count": len(runs),
     }
+
+
+# ---- Read-only reports viewer (path-safe, optional token) ----
+
+RUN_LIST_KEYS = (
+    "runs",
+    "live_shadow_runs",
+    "live_shadow_analyze_runs",
+    "activation_runs",
+    "burn_in_runs",
+    "burn_in_ops_runs",
+    "provider_parity_runs",
+    "quality_audit_runs",
+    "tuning_plan_runs",
+)
+
+BUNDLE_PATHS: Dict[str, List[str]] = {
+    "burn_in_ops_runs": ["burn_in/{run_id}/summary.json", "burn_in/{run_id}/live_compare.json", "burn_in/{run_id}/live_analyze.json"],
+    "tuning_plan_runs": ["tuning_plan/{run_id}.json"],
+    "provider_parity_runs": ["provider_parity/{run_id}.json"],
+    "live_shadow_runs": ["live_shadow_compare/{run_id}.json"],
+    "live_shadow_analyze_runs": ["live_shadow_analyze/{run_id}.json"],
+}
+
+
+@router.get(
+    "/index",
+    summary="Get reports index",
+    response_description="Full reports/index.json (read-only).",
+    dependencies=[Depends(_require_reports_token)],
+)
+def reports_index() -> dict:
+    """Return reports/index.json from the configured reports directory."""
+    root = get_reports_root()
+    index_path = root / "index.json"
+    return load_index(index_path)
+
+
+@router.get(
+    "/item/{run_id}",
+    summary="Get report item by run_id",
+    response_description="Consolidated bundle paths and key summaries for the run.",
+    dependencies=[Depends(_require_reports_token)],
+)
+def reports_item(run_id: str) -> dict:
+    """Return which index lists contain this run_id, their entry, and relative paths to report files."""
+    root = get_reports_root()
+    index = load_index(root / "index.json")
+    found: List[Dict[str, Any]] = []
+    for key in RUN_LIST_KEYS:
+        runs = index.get(key) or []
+        if not isinstance(runs, list):
+            continue
+        entry = next((r for r in runs if r.get("run_id") == run_id), None)
+        if not entry:
+            continue
+        paths: List[str] = []
+        if key in BUNDLE_PATHS:
+            paths = [p.format(run_id=run_id) for p in BUNDLE_PATHS[key]]
+        found.append({"source": key, "entry": entry, "paths": paths})
+    if not found:
+        return {"run_id": run_id, "found": False, "sources": []}
+    return {"run_id": run_id, "found": True, "sources": found}
+
+
+@router.get(
+    "/file",
+    summary="Serve a report JSON file (sandboxed under reports/)",
+    response_description="JSON file contents or 404.",
+    dependencies=[Depends(_require_reports_token)],
+)
+def reports_file(path: str) -> dict:
+    """Serve a report file by relative path under reports/. Path traversal is blocked."""
+    root = get_reports_root()
+    safe = safe_path_under_reports(root, path)
+    if safe is None:
+        raise HTTPException(status_code=400, detail="Invalid or disallowed path")
+    if not safe.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        text = safe.read_text(encoding="utf-8")
+        return json.loads(text)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Read error: {e!s}")
