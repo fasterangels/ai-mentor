@@ -1,0 +1,13 @@
+{
+  "match_id": "stub_live_002",
+  "home_team": "Gamma City",
+  "away_team": "Delta Town",
+  "competition": "Stub Live League",
+  "kickoff_utc": "2025-10-02T19:30:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 1.95,
+    "draw": 3.50,
+    "away": 3.80
+  }
+}
