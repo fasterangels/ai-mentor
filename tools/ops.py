@@ -98,6 +98,42 @@ def _cmd_health_check(_args: argparse.Namespace) -> int:
     return asyncio.run(_run())
 
 
+def _cmd_plan_tuning(args: argparse.Namespace) -> int:
+    import models  # noqa: F401
+    from core.config import get_settings
+    from core.database import init_database, dispose_database, get_database_manager
+    from offline_eval.decision_quality import compute_decision_quality_report, load_history_from_session
+    from runner.tuning_plan_runner import run_plan_tuning
+
+    async def _run() -> int:
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                records = await load_history_from_session(session, limit=args.last_n)
+                quality_report = compute_decision_quality_report(records) if records else {}
+                result = await run_plan_tuning(
+                    session,
+                    last_n=args.last_n,
+                    quality_audit_report=quality_report,
+                    records=records,
+                    dry_run=args.dry_run,
+                    reports_dir=args.output_dir,
+                    index_path=Path(args.output_dir) / "index.json",
+                )
+        finally:
+            await dispose_database()
+
+        status = result.get("status", "FAIL")
+        reasons = result.get("reasons") or []
+        print(status)
+        for r in reasons:
+            print(r)
+        return 0 if status == "PASS" else 1
+
+    return asyncio.run(_run())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="ops", description="Ops: burn-in-run, health-check")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -113,6 +149,12 @@ def main() -> int:
 
     health = sub.add_parser("health-check", help="Validate readiness, tables, connector, policy; exit nonzero on failure.")
     health.set_defaults(func=_cmd_health_check)
+
+    plan_tuning = sub.add_parser("plan-tuning", help="Run quality_audit -> tuning plan -> replay regression; output PASS/FAIL (deterministic).")
+    plan_tuning.add_argument("--last-n", type=int, default=500, help="Use last N runs for quality_audit and replay")
+    plan_tuning.add_argument("--dry-run", action="store_true", help="Do not write tuning_plan report or index")
+    plan_tuning.add_argument("--output-dir", default="reports", help="Reports directory")
+    plan_tuning.set_defaults(func=_cmd_plan_tuning)
 
     args = parser.parse_args()
     return args.func(args)
