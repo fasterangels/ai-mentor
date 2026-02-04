@@ -43,11 +43,13 @@ async def run_shadow_pipeline(
     *,
     now_utc: Optional[datetime] = None,
     dry_run: bool = False,
+    hard_block_persistence: bool = False,
 ) -> Dict[str, Any]:
     """
     Run full shadow pipeline: pipeline -> analyze -> attach -> eval -> tune -> audit.
     Returns PipelineReport. Does not apply policy.
     If dry_run=True, do not persist SnapshotResolution and do not write cache; still compute reports/checksums.
+    If hard_block_persistence=True, skip ALL DB writes (AnalysisRun, Prediction, SnapshotResolution, cache).
     """
     from models.analysis_run import AnalysisRun
     from models.prediction import Prediction
@@ -93,7 +95,7 @@ async def run_shadow_pipeline(
             window_hours=72,
             force_refresh=False,
         )
-        pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run)
+        pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run or hard_block_persistence)
         evidence_pack = pipeline_result.evidence_pack
 
     if not evidence_pack:
@@ -117,51 +119,56 @@ async def run_shadow_pipeline(
     min_conf = min_confidence_from_policy(current_policy)
     analyzer_payload = analyze_v2("RESOLVED", evidence_pack, MARKETS_V2, min_confidence=min_conf)
 
-    # 3) Persist analysis run + predictions
-    run_repo = AnalysisRunRepository(session)
-    pred_repo = PredictionRepository(session)
-    flags = analyzer_payload.get("analysis_run", {}).get("flags") or []
-    counts = analyzer_payload.get("analysis_run", {}).get("counts") or {}
-    run = AnalysisRun(
-        created_at_utc=now,
-        logic_version=ANALYZER_VERSION_V2,
-        mode="PREGAME",
-        match_id=match_id,
-        data_quality_score=0.8,
-        flags_json=json.dumps(flags),
-    )
-    await run_repo.create(run)
-    await session.flush()
-    snapshot_id = run.id
-
-    ep_json = json.dumps(_evidence_pack_to_dict(evidence_pack), default=str)
-    for dec in analyzer_payload.get("decisions") or []:
-        market = dec.get("market") or ""
-        decision = dec.get("decision") or "NO_PREDICTION"
-        pick = dec.get("selection")
-        confidence = dec.get("confidence")
-        confidence = float(confidence) if confidence is not None else 0.0
-        reasons = dec.get("reasons") or []
-        probs = dec.get("probabilities") or {}
-        pred = Prediction(
+    # 3) Persist analysis run + predictions (skip if hard_block_persistence)
+    snapshot_id: Optional[int] = None
+    if not hard_block_persistence:
+        run_repo = AnalysisRunRepository(session)
+        pred_repo = PredictionRepository(session)
+        flags = analyzer_payload.get("analysis_run", {}).get("flags") or []
+        counts = analyzer_payload.get("analysis_run", {}).get("counts") or {}
+        run = AnalysisRun(
             created_at_utc=now,
-            analysis_run_id=run.id,
+            logic_version=ANALYZER_VERSION_V2,
+            mode="PREGAME",
             match_id=match_id,
-            market=market,
-            decision=decision,
-            pick=str(pick) if pick is not None else None,
-            probabilities_json=json.dumps(probs),
-            separation=0.0,
-            confidence=confidence,
-            risk=max(0.0, 1.0 - confidence),
-            reasons_json=json.dumps(reasons),
-            evidence_pack_json=ep_json,
+            data_quality_score=0.8,
+            flags_json=json.dumps(flags),
         )
-        await pred_repo.create(pred)
+        await run_repo.create(run)
+        await session.flush()
+        snapshot_id = run.id
 
-    # 4) Attach result (SnapshotResolution); skip persist when dry_run
+        ep_json = json.dumps(_evidence_pack_to_dict(evidence_pack), default=str)
+        for dec in analyzer_payload.get("decisions") or []:
+            market = dec.get("market") or ""
+            decision = dec.get("decision") or "NO_PREDICTION"
+            pick = dec.get("selection")
+            confidence = dec.get("confidence")
+            confidence = float(confidence) if confidence is not None else 0.0
+            reasons = dec.get("reasons") or []
+            probs = dec.get("probabilities") or {}
+            pred = Prediction(
+                created_at_utc=now,
+                analysis_run_id=run.id,
+                match_id=match_id,
+                market=market,
+                decision=decision,
+                pick=str(pick) if pick is not None else None,
+                probabilities_json=json.dumps(probs),
+                separation=0.0,
+                confidence=confidence,
+                risk=max(0.0, 1.0 - confidence),
+                reasons_json=json.dumps(reasons),
+                evidence_pack_json=ep_json,
+            )
+            await pred_repo.create(pred)
+    else:
+        # For hard_block_persistence, use placeholder snapshot_id for attach_result
+        snapshot_id = None
+
+    # 4) Attach result (SnapshotResolution); skip persist when dry_run or hard_block_persistence
     resolution = await attach_result(
-        session, snapshot_id, match_id, home, away, status, persist=not dry_run
+        session, snapshot_id or 0, match_id, home, away, status, persist=not (dry_run or hard_block_persistence)
     )
     market_outcomes = json.loads(resolution.market_outcomes_json) if isinstance(resolution.market_outcomes_json, str) else resolution.market_outcomes_json
 
@@ -183,7 +190,8 @@ async def run_shadow_pipeline(
 
     # Build PipelineReport
     analysis_picks: Dict[str, Any] = {}
-    for dec in analyzer_payload.get("decisions") or []:
+    decisions_list = analyzer_payload.get("decisions") or []
+    for dec in decisions_list:
         m = dec.get("market")
         if m:
             analysis_picks[m] = {
@@ -197,8 +205,9 @@ async def run_shadow_pipeline(
             "collected_at": collected_at,
         },
         "analysis": {
-            "snapshot_id": snapshot_id,
+            "snapshot_id": snapshot_id if snapshot_id is not None else None,
             "markets_picks_confidences": analysis_picks,
+            "decisions": decisions_list,  # Include full decisions for guardrails (reasons, etc.)
         },
         "resolution": {
             "market_outcomes": market_outcomes,
