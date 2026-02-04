@@ -1,0 +1,22 @@
+"""Registry of platform adapters by name."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+from ingestion.connectors.platform_base import DataConnector
+from ingestion.connectors.sample_platform import SamplePlatformAdapter
+
+_REGISTRY: Dict[str, DataConnector] = {
+    "sample_platform": SamplePlatformAdapter(),
+}
+
+
+def get_connector(name: str) -> Optional[DataConnector]:
+    """Return the adapter registered under name, or None."""
+    return _REGISTRY.get(name)
+
+
+def register_connector(name: str, adapter: DataConnector) -> None:
+    """Register an adapter under name (for tests or extensions)."""
+    _REGISTRY[name] = adapter
