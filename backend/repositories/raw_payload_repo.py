@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import distinct, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.raw_payload import RawPayload
@@ -15,6 +15,17 @@ class RawPayloadRepository(BaseRepository[RawPayload]):
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
+
+    async def list_distinct_match_ids(self, source_name: str = "pipeline_cache") -> List[str]:
+        """Return distinct related_match_id for the given source (ingestion cache)."""
+        stmt = (
+            select(distinct(RawPayload.related_match_id))
+            .where(RawPayload.source_name == source_name)
+            .where(RawPayload.related_match_id.isnot(None))
+        )
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        return sorted([r for r in rows if r])
 
     async def add_payload(
         self,
