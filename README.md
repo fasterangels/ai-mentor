@@ -216,6 +216,26 @@ Reports are stored under `reports/live_shadow_compare/<run_id>.json`; the index 
 
 ---
 
+### Multi-provider parity mode (MULTI_PROVIDER_PARITY)
+
+**MULTI_PROVIDER_PARITY** compares the same match set from two providers (e.g. `sample_platform` and `real_provider_2`) using recorded fixtures by default. No live calls in tests.
+
+**How to run**
+
+- From code: call `run_provider_parity(provider_a_name="sample_platform", provider_b_name="real_provider_2", ...)` from `runner.provider_parity_runner`.
+- Optional `match_ids` limits the set; if omitted, the union of both providers’ match lists is used.
+- Reports are written to `reports/provider_parity/<run_id>.json` and a summary is appended to `reports/index.json` under `provider_parity_runs` / `latest_provider_parity_run_id`.
+
+**How to interpret alerts**
+
+- **PARITY_IDENTITY_MISMATCH:** Number of matches where identity (teams, kickoff) differs between providers exceeds `max_identity_mismatch_count`. Indicates possible feed or mapping issues.
+- **PARITY_MISSING_MARKETS_PCT:** Percentage of expected 1X2 markets missing on one provider exceeds `max_missing_markets_pct`. Indicates coverage gaps.
+- **PARITY_ODDS_OUTLIERS:** Number of odds with drift above threshold (pct or abs) exceeds `max_odds_outlier_count`. Indicates pricing or timing drift.
+
+Alerts are **shadow-only** (no blocking); use them to triage and fix data or config.
+
+---
+
 ## 📊 Performance Metrics
 
 Access real-time performance data:

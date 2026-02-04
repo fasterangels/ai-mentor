@@ -1,0 +1,13 @@
+{
+  "match_id": "real_provider_2_match_001",
+  "home_team": "East City",
+  "away_team": "West United",
+  "competition": "Provider 2 League",
+  "kickoff_utc": "2025-09-20T18:00:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 2.05,
+    "draw": 3.50,
+    "away": 3.40
+  }
+}
