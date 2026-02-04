@@ -61,13 +61,13 @@ async def run_shadow_pipeline(
     evidence_pack: Optional[EvidencePack] = None
 
     if connector_name == "sample_platform":
-        # Recorded fixtures only; no run_pipeline
-        from ingestion.registry import get_connector
+        # Recorded fixtures only; no run_pipeline (enforced via live_io wrapper)
+        from ingestion.live_io import get_connector_safe
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
-        adapter = get_connector("sample_platform")
+        adapter = get_connector_safe("sample_platform")
         if not adapter:
-            return _error_report("CONNECTOR_NOT_FOUND", "sample_platform adapter not registered")
+            return _error_report("CONNECTOR_NOT_FOUND", "sample_platform not available or live IO not allowed")
         ingested = adapter.fetch_match_data(match_id)
         if not ingested:
             return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
