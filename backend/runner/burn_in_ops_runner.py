@@ -29,6 +29,67 @@ def _stable_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def _persist_bundle_and_index(
+    bundle_dir: Path,
+    bundle: Dict[str, Any],
+    compare_report: Dict[str, Any],
+    analyze_report: Dict[str, Any],
+    batch_report: Optional[Dict[str, Any]],
+    index_path: str | Path,
+    run_id: str,
+    created_at: str,
+    connector_name: str,
+    match_count: int,
+    status: str,
+    alerts_count: int,
+    activated: bool,
+    activated_count: int,
+    max_bundles_retained: int,
+    reports_path: Path,
+) -> None:
+    """Always write bundle and index so every run produces report artifacts."""
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "run_id": run_id,
+        "created_at_utc": created_at,
+        "connector_name": connector_name,
+        "matches_count": match_count,
+        "status": status,
+        "alerts_count": alerts_count,
+        "activated": activated,
+    }
+    (bundle_dir / "summary.json").write_text(_stable_json(summary), encoding="utf-8")
+    (bundle_dir / "live_compare.json").write_text(_stable_json(compare_report), encoding="utf-8")
+    (bundle_dir / "live_analyze.json").write_text(_stable_json(analyze_report), encoding="utf-8")
+    if batch_report:
+        (bundle_dir / "shadow_batch.json").write_text(_stable_json(batch_report), encoding="utf-8")
+
+    index = load_index(index_path)
+    append_burn_in_ops_run(index, {
+        "run_id": run_id,
+        "created_at_utc": created_at,
+        "status": status,
+        "alerts_count": alerts_count,
+        "activated": activated,
+        "activated_count": activated_count,
+        "matches_count": match_count,
+        "connector_name": connector_name,
+    })
+    if activated and activated_count > 0:
+        append_activation_run(index, {
+            "run_id": run_id,
+            "created_at_utc": created_at,
+            "connector_name": connector_name,
+            "matches_count": match_count,
+            "activated": True,
+            "activated_count": activated_count,
+            "reason": None,
+            "activation_summary": (batch_report or {}).get("activation") or {},
+        })
+    prune_burn_in_ops_bundles(reports_path / BURN_IN_OPS_SUBDIR, index, max_retained=max_bundles_retained)
+    save_index(index, index_path)
+
+
 async def run_burn_in_ops(
     session: AsyncSession,
     connector_name: str,
@@ -45,33 +106,70 @@ async def run_burn_in_ops(
     """
     Run: ingestion (match list) -> live shadow compare -> live shadow analyze -> (optional) burn-in activation.
     Writes bundle to reports/burn_in/<run_id>/ and appends one entry to index.
-    When dry_run=True, still builds result but may skip writing to disk (caller can check).
+    Reports are always written (dry_run only skips activation; bundle and index are still persisted).
+    Zero-match and connector-unavailable runs are recorded explicitly in the index.
     """
     run_id = _run_id()
     created_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat() + "Z"
     reports_path = Path(reports_dir)
+    reports_path.mkdir(parents=True, exist_ok=True)
     bundle_dir = reports_path / BURN_IN_OPS_SUBDIR / run_id
 
     adapter = live_adapter or get_connector_safe(connector_name)
     if not adapter:
-        return {
+        minimal_compare = {"error": "CONNECTOR_NOT_AVAILABLE", "detail": f"Connector {connector_name!r} not available.", "alerts": []}
+        minimal_analyze = {"error": "CONNECTOR_NOT_AVAILABLE", "detail": f"Connector {connector_name!r} not available.", "alerts": []}
+        bundle = {
             "run_id": run_id,
-            "error": "CONNECTOR_NOT_AVAILABLE",
-            "detail": f"Connector {connector_name!r} not available (check LIVE_IO_ALLOWED and connector env).",
+            "created_at_utc": created_at,
+            "connector_name": connector_name,
+            "matches_count": 0,
             "status": "error",
+            "alerts_count": 0,
+            "activated": False,
+            "live_compare": minimal_compare,
+            "live_analyze": minimal_analyze,
+            "shadow_batch": None,
         }
+        _persist_bundle_and_index(
+            bundle_dir, bundle, minimal_compare, minimal_analyze, None,
+            index_path, run_id, created_at, connector_name, 0, "error", 0, False, 0,
+            max_bundles_retained, reports_path,
+        )
+        bundle["_bundle_dir"] = str(bundle_dir)
+        bundle["error"] = "CONNECTOR_NOT_AVAILABLE"
+        bundle["detail"] = f"Connector {connector_name!r} not available (check LIVE_IO_ALLOWED and connector env)."
+        return bundle
+
     if match_ids is None:
         match_ids = sorted(m.match_id for m in adapter.fetch_matches())
     else:
         match_ids = sorted(match_ids)
 
     if not match_ids:
-        return {
+        # Zero-match: record explicitly (no silent return)
+        compare_report = {"matches_count": 0, "status": "ok", "match_ids": [], "alerts": []}
+        analyze_report = {"matches_count": 0, "status": "ok", "detail": "No matches provided or from connector.", "alerts": []}
+        status = "ok"
+        bundle = {
             "run_id": run_id,
-            "error": "NO_MATCHES",
-            "detail": "No matches from connector or provided list.",
-            "status": "error",
+            "created_at_utc": created_at,
+            "connector_name": connector_name,
+            "matches_count": 0,
+            "status": status,
+            "alerts_count": 0,
+            "activated": False,
+            "live_compare": compare_report,
+            "live_analyze": analyze_report,
+            "shadow_batch": None,
         }
+        _persist_bundle_and_index(
+            bundle_dir, bundle, compare_report, analyze_report, None,
+            index_path, run_id, created_at, connector_name, 0, status, 0, False, 0,
+            max_bundles_retained, reports_path,
+        )
+        bundle["_bundle_dir"] = str(bundle_dir)
+        return bundle
 
     # 1) Live shadow compare
     from runner.live_shadow_compare_runner import run_live_shadow_compare, _connector_supports_live_and_recorded
@@ -158,46 +256,12 @@ async def run_burn_in_ops(
         "shadow_batch": batch_report if batch_report else None,
     }
 
-    if not dry_run:
-        bundle_dir.mkdir(parents=True, exist_ok=True)
-        (bundle_dir / "summary.json").write_text(_stable_json({
-            "run_id": run_id,
-            "created_at_utc": created_at,
-            "connector_name": connector_name,
-            "matches_count": len(match_ids),
-            "status": status,
-            "alerts_count": alerts_count,
-            "activated": activated,
-        }), encoding="utf-8")
-        (bundle_dir / "live_compare.json").write_text(_stable_json(compare_report), encoding="utf-8")
-        (bundle_dir / "live_analyze.json").write_text(_stable_json(analyze_report), encoding="utf-8")
-        if batch_report:
-            (bundle_dir / "shadow_batch.json").write_text(_stable_json(batch_report), encoding="utf-8")
-
-        index = load_index(index_path)
-        append_burn_in_ops_run(index, {
-            "run_id": run_id,
-            "created_at_utc": created_at,
-            "status": status,
-            "alerts_count": alerts_count,
-            "activated": activated,
-            "activated_count": activated_count,
-            "matches_count": len(match_ids),
-            "connector_name": connector_name,
-        })
-        if activated and activated_count > 0:
-            append_activation_run(index, {
-                "run_id": run_id,
-                "created_at_utc": created_at,
-                "connector_name": connector_name,
-                "matches_count": len(match_ids),
-                "activated": True,
-                "activated_count": activated_count,
-                "reason": None,
-                "activation_summary": (batch_report.get("activation") or {}),
-            })
-        prune_burn_in_ops_bundles(reports_path / BURN_IN_OPS_SUBDIR, index, max_retained=max_bundles_retained)
-        save_index(index, index_path)
+    # Always persist bundle and index (dry_run only skips activation; reports still written)
+    _persist_bundle_and_index(
+        bundle_dir, bundle, compare_report, analyze_report, batch_report if batch_report else None,
+        index_path, run_id, created_at, connector_name, len(match_ids), status, alerts_count, activated, activated_count,
+        max_bundles_retained, reports_path,
+    )
 
     bundle["_bundle_dir"] = str(bundle_dir)
     return bundle

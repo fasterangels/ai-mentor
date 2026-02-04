@@ -45,7 +45,7 @@ def stub_client():
 
 @pytest.mark.asyncio
 async def test_burn_in_ops_dry_run_wiring(test_db, stub_client) -> None:
-    """Ops burn-in-run with dry_run=True returns bundle structure without writing to disk."""
+    """Ops burn-in-run with dry_run=True returns bundle structure; reports are still written (read-only semantics)."""
     with pytest.MonkeyPatch.context() as m:
         m.setenv("LIVE_IO_ALLOWED", "1")
         m.setenv("STUB_LIVE_MODE", "ok")
