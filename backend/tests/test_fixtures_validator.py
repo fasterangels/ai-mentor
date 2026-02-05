@@ -22,6 +22,14 @@ def test_validate_fixtures_sample_platform_ok() -> None:
     assert len(report.errors) == 0
 
 
+def test_validate_fixtures_sample_recorded_platform_v2_ok() -> None:
+    """Valid sample_recorded_platform_v2 fixtures pass validation."""
+    path = _backend / "ingestion" / "fixtures" / "sample_recorded_platform_v2"
+    report = validate_fixtures(path)
+    assert report.ok is True
+    assert len(report.errors) == 0
+
+
 def test_validate_fixtures_missing_required_fails(tmp_path: Path) -> None:
     """Fixture missing required field fails validation."""
     (tmp_path / "bad.json").write_text('{"match_id": "x"}', encoding="utf-8")
