@@ -1,6 +1,6 @@
 """
 Post-BLOCK smoke verification: start backend, GET /health, OPTIONS /api/v1/analyze with Origin,
-POST /api/v1/analyze with minimal payload → expect 200 JSON.
+POST /api/v1/analyze with minimal payload → expect 501 and ANALYZE_ENDPOINT_NOT_SUPPORTED (endpoint disabled by design; use /pipeline/shadow/run).
 Used after build, before artifact upload. Exit 1 with clear message if any check fails.
 No new deps; reuse stdlib + existing env.
 
@@ -68,7 +68,7 @@ def _http_post(url: str, data: bytes) -> tuple[int, dict, bytes]:
 
 def main() -> int:
     import argparse
-    p = argparse.ArgumentParser(description="Post-BLOCK smoke: backend + health + OPTIONS + POST /analyze.")
+    p = argparse.ArgumentParser(description="Post-BLOCK smoke: backend + health + OPTIONS + POST /analyze (expect 501).")
     p.add_argument("--repo-root", type=Path, default=DEFAULT_REPO_ROOT, help="Repo root")
     p.add_argument("--wait-sec", type=int, default=DEFAULT_WAIT_SEC, help="Max seconds to wait for backend")
     args = p.parse_args()
@@ -134,18 +134,22 @@ def main() -> int:
             print("FAIL: post-block smoke — OPTIONS /api/v1/analyze returned " + str(code) + " (expected 200 or 204)", file=sys.stderr)
             return 1
 
-        # POST /api/v1/analyze with minimal payload → 200 JSON
+        # POST /api/v1/analyze → 501 and ANALYZE_ENDPOINT_NOT_SUPPORTED (disabled by design; use /pipeline/shadow/run)
         code, _, body = _http_post(base_url + "/api/v1/analyze", POST_PAYLOAD)
-        if code != 200:
-            print("FAIL: post-block smoke — POST /api/v1/analyze returned " + str(code) + " (expected 200)", file=sys.stderr)
+        if code != 501:
+            print("FAIL: post-block smoke — POST /api/v1/analyze returned " + str(code) + " (expected 501)", file=sys.stderr)
             return 1
         try:
-            json.loads(body.decode())
+            data = json.loads(body.decode())
+            err = (data or {}).get("error") or {}
+            if err.get("code") != "ANALYZE_ENDPOINT_NOT_SUPPORTED":
+                print("FAIL: post-block smoke — POST /api/v1/analyze 501 body missing error.code ANALYZE_ENDPOINT_NOT_SUPPORTED", file=sys.stderr)
+                return 1
         except Exception as e:
             print("FAIL: post-block smoke — POST /api/v1/analyze response not valid JSON: " + str(e), file=sys.stderr)
             return 1
 
-        print("post-block smoke: GET /health 200, OPTIONS 200/204, POST /api/v1/analyze 200 JSON — OK")
+        print("post-block smoke: GET /health 200, OPTIONS 200/204, POST /api/v1/analyze 501 + contract — OK")
         return 0
     finally:
         try:

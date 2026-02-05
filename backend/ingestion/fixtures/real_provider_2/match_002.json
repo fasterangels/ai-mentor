@@ -1,0 +1,13 @@
+{
+  "match_id": "real_provider_2_match_002",
+  "home_team": "North FC",
+  "away_team": "South United",
+  "competition": "Provider 2 League",
+  "kickoff_utc": "2025-09-21T15:00:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 1.90,
+    "draw": 3.60,
+    "away": 4.00
+  }
+}

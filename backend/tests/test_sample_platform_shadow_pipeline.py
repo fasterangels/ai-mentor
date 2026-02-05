@@ -56,7 +56,7 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
     assert "ingestion" in report
     assert report["ingestion"].get("payload_checksum") is not None
     assert "analysis" in report
-    assert report["analysis"].get("snapshot_id") is not None
+    assert "markets_picks_confidences" in report["analysis"]
     assert "resolution" in report
     assert "market_outcomes" in report["resolution"]
     assert "evaluation_report_checksum" in report

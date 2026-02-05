@@ -1,7 +1,7 @@
 """
 Canary preflight: start built backend exe, GET /health, OPTIONS /api/v1/analyze with Origin.
 Fail fast with clear message if any step fails. Used at start of windows-e2e CI.
-No CORS/config changes, no POST /analyze — backend + health + preflight only.
+POST /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run. Backend + health + preflight only.
 
 Usage: python packaging/canary_preflight.py [--repo-root PATH] [--wait-sec N]
 Exit: 0 if all pass, 1 otherwise.

@@ -24,7 +24,13 @@ from core.config import get_settings
 from core.database import init_database, dispose_database, get_database_manager
 from runner.shadow_runner import run_shadow_batch
 from reports.alerts import evaluate_alerts
-from reports.index_store import load_index, append_run, save_index
+from reports.index_store import (
+    append_activation_run,
+    append_burn_in_run,
+    load_index,
+    append_run,
+    save_index,
+)
 from limits.limits import prune_index
 
 
@@ -52,6 +58,7 @@ async def _main() -> int:
     parser.add_argument("--match-ids", default=None, help="Optional comma-separated match IDs")
     parser.add_argument("--now-utc", default=None, help="Optional ISO8601 time for determinism")
     parser.add_argument("--dry-run", action="store_true", help="Do not persist SnapshotResolution or write cache")
+    parser.add_argument("--activation", action="store_true", help="Enable activation (respects env gates)")
     args = parser.parse_args()
 
     now = _parse_now_utc(args.now_utc)
@@ -73,6 +80,7 @@ async def _main() -> int:
                 match_ids=match_ids,
                 now_utc=now,
                 dry_run=args.dry_run,
+                activation=args.activation,
             )
     finally:
         await dispose_database()
@@ -111,6 +119,26 @@ async def _main() -> int:
     index_path = output_dir / "index.json"
     index = load_index(index_path)
     append_run(index, index_run_meta)
+    activation_summary = batch_report.get("activation") or {}
+    if args.activation and activation_summary:
+        append_activation_run(index, {
+            "run_id": run_id,
+            "created_at_utc": index_run_meta.get("created_at_utc"),
+            "connector_name": index_run_meta.get("connector_name"),
+            "matches_count": index_run_meta.get("matches_count", 0),
+            "activated": activation_summary.get("activated", False),
+            "reason": activation_summary.get("reason"),
+            "activation_summary": activation_summary,
+        })
+    burn_in_section = activation_summary.get("burn_in")
+    if args.activation and burn_in_section:
+        append_burn_in_run(index, {
+            "run_id": run_id,
+            "created_at_utc": index_run_meta.get("created_at_utc"),
+            "connector_name": index_run_meta.get("connector_name"),
+            "matches_count": index_run_meta.get("matches_count", 0),
+            "burn_in_summary": burn_in_section,
+        })
     prune_index(index)
     save_index(index, index_path)
 

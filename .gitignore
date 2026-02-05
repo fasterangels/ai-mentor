@@ -72,3 +72,6 @@ packaging/artifacts/backend.log
 # Operational reports (reports/ directory tracked via reports/.gitkeep)
 reports/shadow_batch_*.json
 reports/index.json
+reports/burn_in/
+backend/reports/index.json
+backend/reports/burn_in/

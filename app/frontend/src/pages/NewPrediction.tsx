@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { runAnalysis } from "@/api/analyzer";
+import { runShadowPipeline } from "@/api/analyzer";
 
 const COMPETITIONS = [
   { id: "league-a", name: "Λίγκα Α" },
@@ -28,15 +28,31 @@ export function NewPrediction() {
     setError(null);
     setSubmitting(true);
     try {
-      await runAnalysis({
-        competition_id: competitionId || null,
-        home_team_id: homeTeamId,
-        away_team_id: awayTeamId,
-        match_date: matchDate || new Date().toISOString().slice(0, 16),
-        mode,
-        markets: ["1X2", "OU25", "GGNG"],
+      const report = await runShadowPipeline({
+        connector_name: "sample_platform",
+        match_id: "sample_platform_match_001",
+        final_home_goals: 0,
+        final_away_goals: 0,
+        status: "FINAL",
       });
-      navigate("/prediction-result");
+      if (report.error) {
+        setError(report.detail || report.error);
+        return;
+      }
+      const homeName = TEAMS.find((t) => t.id === homeTeamId)?.name ?? "—";
+      const awayName = TEAMS.find((t) => t.id === awayTeamId)?.name ?? "—";
+      const compName = COMPETITIONS.find((c) => c.id === competitionId)?.name ?? "—";
+      navigate("/prediction-result", {
+        state: {
+          decisions: report.analysis?.decisions ?? [],
+          match: {
+            home: homeName,
+            away: awayName,
+            date: matchDate ? new Date(matchDate).toLocaleDateString("el-GR") : new Date().toLocaleDateString("el-GR"),
+            competition: compName,
+          },
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Σφάλμα δικτύου");
     } finally {

@@ -18,7 +18,8 @@ import pytest
 import models  # noqa: F401
 from core.database import init_database, dispose_database, get_database_manager
 from models.base import Base
-from runner.shadow_runner import run_shadow_batch, MAX_MATCHES_PER_RUN
+from limits.limits import get_max_matches_per_run
+from runner.shadow_runner import run_shadow_batch
 
 
 @pytest.fixture
@@ -117,8 +118,9 @@ async def test_deterministic_same_inputs_same_checksums(test_db):
 
 @pytest.mark.asyncio
 async def test_cap_enforced(test_db):
-    """Requesting more than MAX_MATCHES_PER_RUN returns error and no per_match execution."""
-    too_many = [f"m{i}" for i in range(MAX_MATCHES_PER_RUN + 1)]
+    """Requesting more than get_max_matches_per_run() returns error and no per_match execution (quota enforced)."""
+    cap = get_max_matches_per_run()
+    too_many = [f"m{i}" for i in range(cap + 1)]
 
     async with get_database_manager().session() as session:
         report = await run_shadow_batch(
@@ -130,7 +132,7 @@ async def test_cap_enforced(test_db):
     assert report.get("error") == "MAX_MATCHES_EXCEEDED"
     assert "maximum allowed" in report.get("detail", "")
     detail = report.get("detail", "")
-    assert str(MAX_MATCHES_PER_RUN) in detail or str(MAX_MATCHES_PER_RUN + 1) in detail
+    assert str(cap) in detail or str(cap + 1) in detail
     assert report.get("run_meta") is None
     assert report.get("per_match") == []
     assert report.get("aggregates") is None

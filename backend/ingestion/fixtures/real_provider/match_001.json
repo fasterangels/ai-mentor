@@ -1,0 +1,13 @@
+{
+  "match_id": "real_provider_001",
+  "home_team": "Metro FC",
+  "away_team": "Valley United",
+  "competition": "Real Provider League",
+  "kickoff_utc": "2025-11-01T15:00:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 2.05,
+    "draw": 3.50,
+    "away": 3.40
+  }
+}

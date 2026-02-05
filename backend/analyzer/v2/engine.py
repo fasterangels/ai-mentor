@@ -82,6 +82,10 @@ def analyze_v2(
     any_play = counts["PLAY"] > 0
     status = "OK" if any_play else "NO_PREDICTION"
 
+    from .reason_codes import codes_for_reasons
+    for d in decisions:
+        if "reason_codes" not in d:
+            d["reason_codes"] = codes_for_reasons(d.get("reasons") or [])
     return _build_result(
         status=status,
         decisions=decisions,
@@ -94,12 +98,15 @@ def analyze_v2(
 
 def _no_prediction_decision(market: str, flags: List[str]) -> Dict[str, Any]:
     from .contracts import MAX_DECISION_REASONS, POLICY_VERSION_V2
+    from .reason_codes import GATE_BLOCKED
+    reasons = [f"Gate blocked: {', '.join(flags)}"][:MAX_DECISION_REASONS]
     return {
         "market": market,
         "decision": DecisionKind.NO_PREDICTION,
         "selection": None,
         "confidence": None,
-        "reasons": [f"Gate blocked: {', '.join(flags)}"][:MAX_DECISION_REASONS],
+        "reasons": reasons,
+        "reason_codes": [GATE_BLOCKED],
         "flags": list(flags),
         "evidence_refs": [],
         "policy_version": POLICY_VERSION_V2,
