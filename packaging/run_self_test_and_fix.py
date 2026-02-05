@@ -318,8 +318,8 @@ def run_self_test(repo_root: Path, max_iterations: int = 3) -> int:
     if passed:
         append("=== SELF-TEST PASS ===")
         append("backend_started=yes backend_bind_127.0.0.1_8000=yes")
-        append("health=200 preflight=200/204 CORS=yes post_analyze=200 valid_JSON=yes")
-        append("Desktop app can invoke Analyze without Failed to fetch (API verified).")
+        append("health=200 preflight=200/204 CORS=yes post_analyze=501 valid_JSON=yes")
+        append("Desktop app uses /pipeline/shadow/run; /api/v1/analyze returns 501 (not supported).")
     else:
         append("=== SELF-TEST FAIL ===")
         append("iterations=" + str(iteration) + " max=" + str(max_iterations))
