@@ -391,11 +391,12 @@ If ports 8000 or 3000 are busy:
 
 ---
 
+## API Contract
+See `docs/api-surface.md`. Do not use `/api/v1/analyze`; use `/pipeline/shadow/run`.
+
+---
+
 ## 🔍 API Documentation
-
-### API Contract
-
-See [docs/api-surface.md](docs/api-surface.md) for the public API surface contract. Do not use `/api/v1/analyze`; use `/pipeline/shadow/run`.
 
 Once running, access interactive API docs:
 - **Swagger UI:** http://localhost:8000/docs
