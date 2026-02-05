@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ingestion.live_io import get_connector_safe
+from ingestion.live_io import execution_mode_context, get_connector_safe
 from reports.index_store import append_burn_in_ops_run, append_activation_run, load_index, save_index
 from limits.limits import prune_burn_in_ops_bundles
 
@@ -118,7 +118,8 @@ async def run_burn_in_ops(
     reports_path.mkdir(parents=True, exist_ok=True)
     bundle_dir = reports_path / BURN_IN_OPS_SUBDIR / run_id
 
-    adapter = live_adapter or get_connector_safe(connector_name)
+    with execution_mode_context("shadow"):
+        adapter = live_adapter or get_connector_safe(connector_name)
     if not adapter:
         minimal_compare = {"error": "CONNECTOR_NOT_AVAILABLE", "detail": f"Connector {connector_name!r} not available.", "alerts": []}
         minimal_analyze = {"error": "CONNECTOR_NOT_AVAILABLE", "detail": f"Connector {connector_name!r} not available.", "alerts": []}

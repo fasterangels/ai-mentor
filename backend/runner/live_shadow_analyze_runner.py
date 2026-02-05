@@ -58,7 +58,7 @@ async def run_live_shadow_analyze(
     - Analyzer invoked exactly once per snapshot (live and recorded).
     - Audit generated but read-only.
     """
-    from ingestion.live_io import get_connector_safe
+    from ingestion.live_io import execution_mode_context, get_connector_safe
     from runner.live_shadow_compare_runner import _recorded_env
 
     policy = policy or DEFAULT_POLICY
@@ -67,7 +67,8 @@ async def run_live_shadow_analyze(
 
     # Get match_ids from live connector if not provided
     if match_ids is None:
-        live_adapter = get_connector_safe(connector_name)
+        with execution_mode_context("shadow"):
+            live_adapter = get_connector_safe(connector_name)
         if not live_adapter:
             return {"error": "CONNECTOR_NOT_AVAILABLE", "detail": "Live connector not available (check LIVE_IO_ALLOWED and connector env)."}
         match_ids = sorted(m.match_id for m in live_adapter.fetch_matches())
@@ -103,7 +104,8 @@ async def run_live_shadow_analyze(
     recorded_conn = recorded_connector_name or connector_name
     if recorded_connector_name:
         # Use different connector for recorded (e.g. sample_platform for stub_live_platform)
-        recorded_adapter = get_connector_safe(recorded_conn)
+        with execution_mode_context("shadow"):
+            recorded_adapter = get_connector_safe(recorded_conn)
         if recorded_adapter:
             for match_id in match_ids:
                 score = final_scores.get(match_id) or {"home": 0, "away": 0}
@@ -126,7 +128,8 @@ async def run_live_shadow_analyze(
     elif _connector_supports_live_and_recorded(connector_name):
         # Use connector with env toggling (e.g. real_provider)
         with _recorded_env(connector_name):
-            recorded_adapter = get_connector_safe(connector_name)
+            with execution_mode_context("shadow"):
+                recorded_adapter = get_connector_safe(connector_name)
             if recorded_adapter:
                 for match_id in match_ids:
                     score = final_scores.get(match_id) or {"home": 0, "away": 0}
