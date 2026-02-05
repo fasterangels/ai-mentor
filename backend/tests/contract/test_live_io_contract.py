@@ -98,7 +98,7 @@ def test_get_connector_safe_live_blocked_without_live_io() -> None:
 
 def test_get_connector_safe_live_allowed_when_env_set() -> None:
     """Non-recorded connector is returned when LIVE_IO_ALLOWED is true and execution_mode is shadow with baseline."""
-    with patch("ingestion.live_io.get_connector", return_value=_FakeLiveConnector()):
+    with patch("ingestion.registry.get_connector", return_value=_FakeLiveConnector()):
         with patch("ingestion.live_io._fixtures_dir_for_connector") as mock_fixtures:
             mock_fixtures.return_value = _backend / "ingestion" / "fixtures" / "sample_platform"
             with pytest.MonkeyPatch.context() as m:

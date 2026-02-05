@@ -51,7 +51,10 @@ async def test_burn_in_ops_dry_run_wiring(test_db, stub_client) -> None:
         m.setenv("STUB_LIVE_MODE", "ok")
 
         from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+        from ingestion.live_io import circuit_breaker_reset
         from ingestion.registry import get_connector, register_connector
+
+        circuit_breaker_reset()
 
         adapter = StubLivePlatformAdapter(base_url="http://testserver")
         adapter._base_url = "http://testserver"

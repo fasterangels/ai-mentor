@@ -64,12 +64,19 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -U pip && pip install -r backend/requirements.txt
 
+      - name: Backend tests (must pass)
+        run: python -m pytest backend/tests/ -v
+
       - name: Contract lock (analyze response critical keys)
         run: python -m pytest backend/tests/test_analyze_contract.py -v
 
       - name: Install frontend dependencies
         working-directory: app/frontend
         run: npm ci
+
+      - name: Frontend lint (must pass)
+        working-directory: app/frontend
+        run: npm run lint
 
       - name: Build desktop (backend exe + Tauri NSIS + E2E test)
         run: |

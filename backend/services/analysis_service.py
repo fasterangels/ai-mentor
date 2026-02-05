@@ -18,6 +18,7 @@ from analyzer.engine_v1 import analyze
 from analyzer.types import AnalyzerInput, AnalyzerPolicy, AnalyzerResult
 from analyzer.v2.engine import analyze_v2
 from analyzer.v2.contracts import ANALYZER_VERSION_DEFAULT
+from policy.policy_runtime import get_active_policy, min_confidence_from_policy
 from evaluation.evaluation_v2 import (
     compute_evidence_pack_hash,
     compute_metrics,
@@ -158,7 +159,13 @@ async def run_analysis_flow(session: AsyncSession, request: Dict[str, Any]) -> D
     pipeline_result = await run_pipeline(session, pipeline_input)
     evidence_pack = pipeline_result.evidence_pack
 
-    min_confidence = float(policy_dict.get("min_confidence", 0.62))
+    # Read thresholds from policy (file or default); request can override
+    active_policy = get_active_policy()
+    min_confidence = float(
+        policy_dict.get("min_confidence")
+        if policy_dict.get("min_confidence") is not None
+        else min_confidence_from_policy(active_policy)
+    )
 
     if analyzer_version == "v2":
         markets_v2 = [_normalize_market_for_v2(m) for m in markets]
@@ -188,6 +195,7 @@ async def run_analysis_flow(session: AsyncSession, request: Dict[str, Any]) -> D
             min_sep_ou=float(policy_dict.get("min_sep_ou", 0.08)),
             min_sep_gg=float(policy_dict.get("min_sep_gg", 0.08)),
             min_confidence=min_confidence,
+            risk_caps=policy_dict.get("risk_caps") or {"default": 0.35},
         )
         analyzer_input = AnalyzerInput(
             analysis_run_id=f"run-{match_id}",

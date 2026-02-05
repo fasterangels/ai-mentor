@@ -75,19 +75,10 @@ async def run_shadow_pipeline(
     t_start = log_pipeline_start(connector_name, match_id)
     evidence_pack: Optional[EvidencePack] = None
 
-    if connector_name in ("sample_platform", "stub_platform", "stub_live_platform", "real_provider"):
-        # Recorded fixtures (sample_platform) or live stubs/real_provider via get_connector_safe
+    if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
+        # Recorded fixtures (sample_platform) or live stubs (stub_platform/stub_live_platform) via get_connector_safe
         # Live connectors require LIVE_IO_ALLOWED=true and execution_mode=shadow with recorded baseline
-        import time
-        from ingestion.live_io import (
-            LiveIOCircuitOpenError,
-            LiveIOFailureError,
-            LiveIORateLimitedError,
-            LiveIOTimeoutError,
-            execution_mode_context,
-            get_connector_safe,
-            record_request,
-        )
+        from ingestion.live_io import execution_mode_context, get_connector_safe, record_request
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
         with execution_mode_context("shadow"):
@@ -96,21 +87,18 @@ async def run_shadow_pipeline(
             log_guardrail_trigger("connector_not_found", f"{connector_name} not available or live IO not allowed")
             log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="CONNECTOR_NOT_FOUND")
             return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
-        # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform/real_provider recorded path)
+        # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)
         if connector_name in ("stub_platform", "stub_live_platform"):
             t0 = time.perf_counter()
-        try:
-            ingested = adapter.fetch_match_data(match_id)
-        except (LiveIOTimeoutError, LiveIORateLimitedError, LiveIOFailureError, LiveIOCircuitOpenError):
-            return _error_report("LIVE_IO_ERROR", "Live IO request failed (timeout, rate limit, server error, or circuit open)")
-        if connector_name == "stub_platform":
+        ingested = adapter.fetch_match_data(match_id)
+        if connector_name in ("stub_platform", "stub_live_platform"):
             latency_ms = (time.perf_counter() - t0) * 1000
             record_request(success=ingested is not None, latency_ms=latency_ms)
         if not ingested:
             log_guardrail_trigger("no_fixture", f"No fixture found for match_id={match_id!r}")
             log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_FIXTURE")
             return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
-        # Reuse same ensure logic for all (same ingested data structure)
+        # Reuse same ensure logic for both connectors (same ingested data structure)
         await _ensure_sample_platform_match(session, ingested, now)
         evidence_pack = ingested_to_evidence_pack(ingested, captured_at_utc=now)
         source = "recorded" if connector_name == "sample_platform" else "live"
