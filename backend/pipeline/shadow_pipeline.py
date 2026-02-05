@@ -332,6 +332,7 @@ async def run_shadow_pipeline(
             "diffs": [list(d) for d in proposal.diffs],
             "guardrails_results": [list(g) for g in proposal.guardrails_results],
             "proposal_checksum": proposal_checksum,
+            "tuner_constraints_summary": getattr(proposal, "tuner_constraints_summary", None) or {},
         },
         "audit": {
             "changed_count": audit_report["summary"]["changed_count"],
@@ -450,7 +451,7 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "analysis": {"snapshot_id": None, "markets_picks_confidences": {}},
         "resolution": {"market_outcomes": {}},
         "evaluation_report_checksum": None,
-        "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None},
+        "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None, "tuner_constraints_summary": {}},
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
         "error": reason,
         "detail": detail,

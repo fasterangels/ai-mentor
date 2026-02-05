@@ -8,6 +8,7 @@ from typing import Any
 from policy.policy_model import MarketPolicy, Policy, PolicyVersion, ReasonPolicy
 from policy.policy_store import checksum_report, default_policy
 from policy.policy_runtime import get_active_policy
+from policy.tuner_constraints import apply_constraints, get_tuner_constraints
 
 MIN_SAMPLE_SIZE = 30
 CONFIDENCE_BAND_DRIFT = (0.55, 0.60)
@@ -27,6 +28,7 @@ class PolicyProposal:
     diffs: list[tuple[str, Any, Any, str]]
     guardrails_results: list[tuple[str, bool, str]]
     evaluation_report_checksum: str
+    tuner_constraints_summary: dict | None = None
 
 
 def _band_label(lo: float, hi: float) -> str:
@@ -97,6 +99,29 @@ def run_tuner(evaluation_report: dict[str, Any]) -> PolicyProposal:
                 reasons[reason_code] = ReasonPolicy(reason_code=reason_code, dampening_factor=new_df)
                 diffs.append((f"reasons.{reason_code}.dampening_factor", old_df, new_df, f"success_rate {worst_sr:.2f}"))
 
+    # Apply drift budgets and hard caps (deterministic)
+    current_markets_dict = {k: {"min_confidence": v.min_confidence, "confidence_bands": v.confidence_bands} for k, v in current.markets.items()}
+    current_reasons_dict = {k: {"reason_code": v.reason_code, "dampening_factor": v.dampening_factor} for k, v in current.reasons.items()}
+    constrained_diffs, tuner_constraints_summary = apply_constraints(
+        current_markets_dict, current_reasons_dict, diffs, config=get_tuner_constraints()
+    )
+    # Rebuild markets/reasons from current + constrained_diffs
+    markets = {
+        k: MarketPolicy(min_confidence=v.min_confidence, confidence_bands=v.confidence_bands)
+        for k, v in current.markets.items()
+    }
+    reasons = {k: ReasonPolicy(reason_code=v.reason_code, dampening_factor=v.dampening_factor) for k, v in current.reasons.items()}
+    for path, _old_val, new_val, _reason in constrained_diffs:
+        parts = path.split(".")
+        if len(parts) >= 3 and parts[0] == "markets" and parts[2] == "min_confidence":
+            m = parts[1]
+            if m in markets:
+                markets[m] = MarketPolicy(min_confidence=float(new_val), confidence_bands=markets[m].confidence_bands)
+        elif len(parts) >= 3 and parts[0] == "reasons" and parts[2] == "dampening_factor":
+            r = parts[1]
+            if r in reasons:
+                reasons[r] = ReasonPolicy(reason_code=reasons[r].reason_code, dampening_factor=float(new_val))
+
     proposed = Policy(
         meta=PolicyVersion(
             version=current.meta.version + "-tuned",
@@ -124,7 +149,8 @@ def run_tuner(evaluation_report: dict[str, Any]) -> PolicyProposal:
 
     return PolicyProposal(
         proposed_policy=proposed,
-        diffs=diffs,
+        diffs=constrained_diffs,
         guardrails_results=guardrails_results,
         evaluation_report_checksum=eval_checksum,
+        tuner_constraints_summary=tuner_constraints_summary,
     )
