@@ -1,0 +1,42 @@
+# Enforce VERSION file (present + semver) and reports/ gitignore.
+name: version-and-reports-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: VERSION exists and is semver
+        run: |
+          python -c "
+          from pathlib import Path
+          import re
+          vpath = Path('VERSION')
+          if not vpath.is_file():
+              raise SystemExit('VERSION file is missing')
+          raw = vpath.read_text().strip().splitlines()[0].strip()
+          if not re.match(r'^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$', raw):
+              raise SystemExit(f'VERSION must match semver pattern (e.g. 1.0.0): got {raw!r}')
+          print('VERSION:', raw)
+          "
+
+      - name: reports/ remains gitignored
+        run: |
+          if ! grep -q 'reports' .gitignore; then
+            echo "ERROR: .gitignore must ignore reports (e.g. reports/ or reports/*.json)"
+            exit 1
+          fi
+          echo "reports entries found in .gitignore"

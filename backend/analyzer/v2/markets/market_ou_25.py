@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..contracts import (
     DecisionKind,
@@ -13,6 +13,7 @@ from ..contracts import (
     SelectionOU25,
 )
 from ..gates import should_downgrade_to_no_bet
+from ..reason_codes import codes_for_reasons, EXPECTED_GOALS_ABOVE, EXPECTED_GOALS_BELOW, GOALS_TREND, MISSING_STATS, XG_PROXY
 
 EXPECTED_GOALS_THRESHOLD = 2.5
 MIN_SEP_OU = 0.08
@@ -28,6 +29,7 @@ def score_ou_25(
     Compute Over/Under 2.5 decision from features. Returns v2 decision dict.
     """
     reasons: List[str] = []
+    reason_codes_ou: List[str] = []
     flags: List[str] = []
     evidence_refs: List[str] = []
 
@@ -38,6 +40,7 @@ def score_ou_25(
             selection=None,
             confidence=None,
             reasons=["Missing stats for OU_2.5"],
+            reason_codes=[MISSING_STATS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -50,6 +53,8 @@ def score_ou_25(
 
     expected_goals = (home_avg + away_conceded) / 2.0 + (away_avg + home_conceded) / 2.0
     reasons.append(f"xG proxy={expected_goals:.2f}")
+    reason_codes_ou.append(XG_PROXY)
+    reason_codes_ou.append(GOALS_TREND)
     evidence_refs.append("stats.goals_trend")
 
     diff = expected_goals - EXPECTED_GOALS_THRESHOLD
@@ -66,6 +71,7 @@ def score_ou_25(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_ou[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -81,6 +87,7 @@ def score_ou_25(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_ou[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -88,9 +95,11 @@ def score_ou_25(
     if p_over >= p_under:
         selection = SelectionOU25.OVER
         reasons.append("expected goals above threshold")
+        reason_codes_ou.append(EXPECTED_GOALS_ABOVE)
     else:
         selection = SelectionOU25.UNDER
         reasons.append("expected goals below threshold")
+        reason_codes_ou.append(EXPECTED_GOALS_BELOW)
 
     return _decision(
         market=MARKET_OU_25,
@@ -98,6 +107,7 @@ def score_ou_25(
         selection=selection.value,
         confidence=confidence,
         reasons=reasons[:MAX_DECISION_REASONS],
+        reason_codes=reason_codes_ou[:MAX_DECISION_REASONS],
         flags=flags,
         evidence_refs=evidence_refs,
     )
@@ -120,6 +130,7 @@ def _decision(
     reasons: List[str],
     flags: List[str],
     evidence_refs: List[str],
+    reason_codes: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "market": market,
@@ -130,6 +141,7 @@ def _decision(
         "policy_version": POLICY_VERSION_V2,
         "meta": {},
     }
+    out["reason_codes"] = (reason_codes or codes_for_reasons(reasons))[:MAX_DECISION_REASONS]
     if selection is not None:
         out["selection"] = selection
     if confidence is not None:

@@ -18,7 +18,7 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 
 **No new features.** This release contains CI/infra guardrails only:
 
-- **Canary preflight:** Fail-fast job at start of Windows E2E (backend exe + GET /health + OPTIONS /api/v1/analyze with Origin).
+- **Canary preflight:** Fail-fast job at start of Windows E2E (backend exe + GET /health + OPTIONS /api/v1/analyze with Origin). POST /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run.
 - **Contract lock:** Pytest asserting analyze response critical keys (`resolver.status`, `analyzer.outcome` or `analyzer.decisions`, `match_id`).
 - **Artifact invariants:** CI step asserting `ci_build_stdout.txt`, `backend.log`, and NSIS installer exist on success.
 - **Rollback doc:** README section for deleting a release, moving/re-pushing a tag, re-running the release workflow.
@@ -220,6 +220,100 @@ TOP_P=0.9                       # Nucleus sampling threshold
 
 ---
 
+## Live shadow compare (LIVE_SHADOW_COMPARE)
+
+**LIVE_SHADOW_COMPARE** is a run mode that compares live ingestion to recorded fixtures (normalization only, no decisions, no writes by default).
+
+### Behavior
+
+- **No analyzer:** The pipeline runs normalization only; no picks or decisions are produced.
+- **No writes by default:** Report and index updates are written only if `LIVE_WRITES_ALLOWED=true` (default: false). Cache and DB writes are hard-blocked in this mode unless that flag is set.
+
+### How to run safely
+
+1. **Required env (for live path):**  
+   - `LIVE_IO_ALLOWED=true`  
+   - For **real_provider**: `REAL_PROVIDER_LIVE=true`, `REAL_PROVIDER_BASE_URL`, `REAL_PROVIDER_API_KEY`
+2. **Optional:** `LIVE_WRITES_ALLOWED=true` to persist the compare report and append its summary to `reports/index.json`.
+3. **API:**  
+   - `POST /api/v1/reports/live-shadow/run` with body `{"connector_name": "real_provider"}` (or another connector that supports live + recorded).  
+   - `GET /api/v1/reports/live-shadow/latest` returns the latest compare summary from `reports/index.json` (read-only, no DB).
+
+Reports are stored under `reports/live_shadow_compare/<run_id>.json`; the index is updated only when writes are allowed.
+
+---
+
+### Multi-provider parity mode (MULTI_PROVIDER_PARITY)
+
+**MULTI_PROVIDER_PARITY** compares the same match set from two providers (e.g. `sample_platform` and `real_provider_2`) using recorded fixtures by default. No live calls in tests.
+
+**How to run**
+
+- From code: call `run_provider_parity(provider_a_name="sample_platform", provider_b_name="real_provider_2", ...)` from `runner.provider_parity_runner`.
+- Optional `match_ids` limits the set; if omitted, the union of both providers’ match lists is used.
+- Reports are written to `reports/provider_parity/<run_id>.json` and a summary is appended to `reports/index.json` under `provider_parity_runs` / `latest_provider_parity_run_id`.
+
+**How to interpret alerts**
+
+- **PARITY_IDENTITY_MISMATCH:** Number of matches where identity (teams, kickoff) differs between providers exceeds `max_identity_mismatch_count`. Indicates possible feed or mapping issues.
+- **PARITY_MISSING_MARKETS_PCT:** Percentage of expected 1X2 markets missing on one provider exceeds `max_missing_markets_pct`. Indicates coverage gaps.
+- **PARITY_ODDS_OUTLIERS:** Number of odds with drift above threshold (pct or abs) exceeds `max_odds_outlier_count`. Indicates pricing or timing drift.
+
+Alerts are **shadow-only** (no blocking); use them to triage and fix data or config.
+
+---
+
+### Decision quality audit (quality-audit)
+
+The **quality-audit** CLI produces deep-audit reports from stored snapshots and resolutions: reason effectiveness over time (with configurable decay), reason churn, confidence calibration by band per market, and stability (pick flip rate, confidence volatility). Use these for **shadow tuning** only; suggestions do not change policy automatically.
+
+**How to run**
+
+- From repo root: `python tools/quality_audit.py [--last-n N] [--date-from ISO] [--date-to ISO] [--output-dir reports]`
+- Requires DB with analysis_runs, snapshot_resolutions, and predictions (e.g. after shadow/analyze runs).
+- Output: `reports/quality_audit/<run_id>.json` and an entry in `reports/index.json` under `quality_audit_runs` / `latest_quality_audit_run_id`.
+
+**How to use the outputs**
+
+- **reason_effectiveness_over_time:** Per-reason win/loss/neutral and decay-weighted contribution. Use to spot reasons whose effectiveness degrades (see suggestions).
+- **reason_churn:** Appearance/disappearance of reason codes across runs; high churn may indicate instability.
+- **confidence_calibration:** Per market and band, predicted confidence vs empirical accuracy. Use to tune bands or thresholds.
+- **stability:** Pick flip rate and confidence volatility (p95 delta) across comparable snapshots.
+- **suggestions:** Dampening candidates (reasons to consider down-weighting) and confidence band adjustments. These are **suggestions only**; no automatic policy change.
+
+### Burn-in ops (stabilization, no scheduler)
+
+See **docs/runbook_burnin.md** for required env, cadence, and incident playbook.
+
+- **Single pipeline:** `python tools/ops.py burn-in-run [--connector NAME] [--dry-run] [--activation]`  
+  Runs: ingestion → live shadow compare → live shadow analyze → (optional) burn-in activation if gates pass. Writes one report bundle under `reports/burn_in/<run_id>/` and updates `reports/index.json` (status, alerts, activated, counts). Use `--dry-run` to skip writing bundle/index. Retention: configurable max bundles (default 30); pruning is deterministic and logged in index.
+- **Health check:** `python tools/ops.py health-check`  
+  Validates readiness, required tables, connector availability, policy presence. Exit code nonzero on failure.
+
+---
+
+### v1.0 Burn-in Operations
+
+**Daily run (preset burn_in_daily)**  
+Use the preset to run burn-in with activation enabled (one match, burn_in mode):
+
+- **Runner script (Unix):** `./docs/burn_in_daily.sh` — sets env (ACTIVATION_ENABLED=true, ACTIVATION_MODE=burn_in, ACTIVATION_MAX_MATCHES=1, LIVE_IO_ALLOWED=true, LIVE_WRITES_ALLOWED=true, ACTIVATION_KILL_SWITCH=false), runs `ai-mentor ops burn-in-run --activation` once, **exits non-zero if guardrails trigger critical alerts** (status != ok or alerts_count > 0).
+- **Runner script (Windows):** `.\docs\burn_in_daily.ps1` — same behavior.
+- Preset details: **docs/burn_in_daily_preset.md**.
+
+**What “normal” looks like**  
+- Status `ok`, alerts_count `0`, activated `true` or `false` depending on gates. Matches count and connector name in the last line of output (or in the daily summary).
+
+**When to flip the kill-switch**  
+- Set **ACTIVATION_KILL_SWITCH=true** (or **ACTIVATION_ENABLED=false**) immediately if alerts spike, live IO degrades, or you need to stop activation for any reason. All runs then become shadow-only (no writes, no activation). See **docs/runbook_burnin.md** incident playbook.
+
+**Daily summary**  
+- After a run, print a concise summary of the latest burn-in bundle (alerts, activated count, latency/confidence when available):  
+  `python tools/burn_in_summary.py [--reports-dir reports]`  
+  No persistence changes; reads `reports/index.json` and `reports/burn_in/<latest_run_id>/`.
+
+---
+
 ## 📊 Performance Metrics
 
 Access real-time performance data:
@@ -324,6 +418,11 @@ If ports 8000 or 3000 are busy:
 
 ---
 
+## API Contract
+See `docs/api-surface.md`. Do not use `/api/v1/analyze`; use `/pipeline/shadow/run`.
+
+---
+
 ## 🔍 API Documentation
 
 Once running, access interactive API docs:
@@ -337,6 +436,37 @@ Once running, access interactive API docs:
 - `POST /messages` - Send message (non-streaming)
 - `POST /messages/stream` - Send message (streaming)
 - `GET /conversations` - List conversations
+
+### Reports viewer (read-only)
+
+The backend exposes a **read-only reports API** to inspect `reports/index.json` and individual report files (e.g. burn-in bundles, tuning plans) without writing anything.
+
+**How to run and query:**
+
+1. **Reports directory**  
+   By default the API serves from the `reports/` directory (relative to the process working directory). Override with env:  
+   `REPORTS_DIR=/path/to/reports`
+
+2. **Endpoints**
+   - `GET /api/v1/reports/index` — returns the full `reports/index.json`.
+   - `GET /api/v1/reports/item/{run_id}` — returns which index lists contain that `run_id`, their entry, and relative paths to report files (e.g. `burn_in/<run_id>/summary.json`).
+   - `GET /api/v1/reports/file?path=<relative>` — serves a single report JSON file. `path` must be relative and under `reports/` (path traversal is blocked).
+
+3. **Optional auth**
+   - If you set `REPORTS_READ_TOKEN` in the environment, the API requires the header `X-Reports-Token: <value>` to match.  
+   - If `REPORTS_READ_TOKEN` is not set, no token is required (suitable for local use).
+
+**Example (no token):**
+```bash
+curl http://localhost:8000/api/v1/reports/index
+curl "http://localhost:8000/api/v1/reports/file?path=burn_in/my_run_id/summary.json"
+```
+
+**Example (with token):**
+```bash
+export REPORTS_READ_TOKEN=my-secret
+curl -H "X-Reports-Token: my-secret" http://localhost:8000/api/v1/reports/index
+```
 - `GET /memories` - List memories
 - `GET /knowledge` - List knowledge entries
 

@@ -39,15 +39,16 @@ curl.exe -i -X POST "http://127.0.0.1:8000/api/v1/analyze" ^
 ```
 
 **Expected:**
-- Status: **200 OK** with JSON body (analysis result or NO_PREDICTION; either is fine)
+- /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run.
+- Status: **501 Not Implemented** with JSON body `{"error":{"code":"ANALYZE_ENDPOINT_NOT_SUPPORTED",...}}`
 - No CORS or network errors
 
 ## 4) Browser test
 
 1. Open **http://localhost:3000** or **http://127.0.0.1:3000**
-2. Enter home/away teams
-3. Click **Analyze**
+2. Enter match ID (or use default) and optional home/away labels.
+3. Click **Run Shadow Pipeline** (runs via `/pipeline/shadow/run`).
 
 **Expected:**
-- Analysis result is rendered
-- No "Failed to fetch" or "Backend not reachable" error
+- Pipeline result (decisions, evaluation, audit) is rendered.
+- No "Failed to fetch" or "Backend not reachable" error. Do not use `/api/v1/analyze`; it is intentionally not supported (501). Use `/pipeline/shadow/run`.

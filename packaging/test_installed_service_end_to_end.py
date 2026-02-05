@@ -1,5 +1,5 @@
 """
-End-to-end test: NSIS silent install -> AI_Mentor_Backend service RUNNING -> GET /health -> POST /api/v1/analyze.
+End-to-end test: NSIS silent install -> AI_Mentor_Backend service RUNNING -> GET /health -> POST /api/v1/analyze (expect 501, ANALYZE_ENDPOINT_NOT_SUPPORTED).
 Uses cmd/subprocess only (NO PowerShell). Exit 0 only if ALL pass.
 Prints proof: installer path, sc query output, health/analyze status and body, last 80 lines of backend.log.
 """
@@ -167,7 +167,7 @@ def main() -> int:
             print(line)
         return 1
 
-    # POST /api/v1/analyze with "{}"
+    # POST /api/v1/analyze → 501 and ANALYZE_ENDPOINT_NOT_SUPPORTED (disabled by design; use /pipeline/shadow/run)
     try:
         analyze_status, analyze_body = _post(ANALYZE_URL, b"{}", timeout=15)
     except Exception as e:
@@ -176,15 +176,19 @@ def main() -> int:
     analyze_preview = (analyze_body[:ANALYZE_BODY_MAX] or b"").decode("utf-8", errors="replace")
     print("--- analyze status/body (first 2KB) ---")
     print(f"status={analyze_status} body={analyze_preview!r}")
-    if analyze_status != 200:
-        print("FAIL: POST /api/v1/analyze did not return 200")
+    if analyze_status != 501:
+        print("FAIL: POST /api/v1/analyze did not return 501")
         log_path = _log_dir() / "backend.log"
         print("--- backend.log (last 80) ---")
         for line in _tail(log_path, LOG_TAIL_LINES):
             print(line)
         return 1
     try:
-        json.loads(analyze_body.decode("utf-8", errors="replace"))
+        data = json.loads(analyze_body.decode("utf-8", errors="replace"))
+        err = (data or {}).get("error") or {}
+        if err.get("code") != "ANALYZE_ENDPOINT_NOT_SUPPORTED":
+            print("FAIL: analyze 501 response missing error.code ANALYZE_ENDPOINT_NOT_SUPPORTED")
+            return 1
     except Exception as e:
         print(f"FAIL: analyze response is not valid JSON: {e}")
         return 1

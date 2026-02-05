@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..contracts import (
     DecisionKind,
@@ -12,6 +12,7 @@ from ..contracts import (
     SelectionBTTS,
 )
 from ..gates import should_downgrade_to_no_bet
+from ..reason_codes import codes_for_reasons, BTTS_TREND, DEFENSIVE_STRENGTH, MISSING_STATS
 
 MIN_SEP_BTTS = 0.08
 
@@ -26,6 +27,7 @@ def score_btts(
     Compute Both Teams To Score (YES/NO) decision from features. Returns v2 decision dict.
     """
     reasons: List[str] = []
+    reason_codes_btts: List[str] = []
     flags: List[str] = []
     evidence_refs: List[str] = []
 
@@ -36,6 +38,7 @@ def score_btts(
             selection=None,
             confidence=None,
             reasons=["Missing stats for BTTS"],
+            reason_codes=[MISSING_STATS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -56,6 +59,7 @@ def score_btts(
     p_no = 1.0 - p_yes
     separation = abs(p_yes - p_no)
     reasons.append(f"P(GG) proxy={p_yes:.2f}")
+    reason_codes_btts.append(BTTS_TREND)
     evidence_refs.append("stats.goals_trend")
 
     confidence = min(1.0, max(0.0, 0.5 + separation * 2.0))
@@ -67,6 +71,7 @@ def score_btts(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_btts[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -82,6 +87,7 @@ def score_btts(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_btts[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -89,9 +95,11 @@ def score_btts(
     if p_yes >= p_no:
         selection = SelectionBTTS.YES
         reasons.append("both teams scoring trend")
+        reason_codes_btts.append(BTTS_TREND)
     else:
         selection = SelectionBTTS.NO
         reasons.append("defensive strength present")
+        reason_codes_btts.append(DEFENSIVE_STRENGTH)
 
     return _decision(
         market=MARKET_BTTS,
@@ -99,6 +107,7 @@ def score_btts(
         selection=selection.value,
         confidence=confidence,
         reasons=reasons[:MAX_DECISION_REASONS],
+        reason_codes=reason_codes_btts[:MAX_DECISION_REASONS],
         flags=flags,
         evidence_refs=evidence_refs,
     )
@@ -121,6 +130,7 @@ def _decision(
     reasons: List[str],
     flags: List[str],
     evidence_refs: List[str],
+    reason_codes: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "market": market,
@@ -131,6 +141,7 @@ def _decision(
         "policy_version": POLICY_VERSION_V2,
         "meta": {},
     }
+    out["reason_codes"] = (reason_codes or codes_for_reasons(reasons))[:MAX_DECISION_REASONS]
     if selection is not None:
         out["selection"] = selection
     if confidence is not None:

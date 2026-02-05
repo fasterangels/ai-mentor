@@ -2,7 +2,7 @@
 Self-test and auto-fix for built backend sidecar.
 
 Runs in order: (1) backend starts and writes backend.log, (2) binds 127.0.0.1:8000,
-(3) GET /health -> 200, (4) OPTIONS /api/v1/analyze with CORS -> 200/204, (5) POST /api/v1/analyze -> 200 + JSON.
+(3) GET /health -> 200, (4) OPTIONS /api/v1/analyze with CORS -> 200/204, (5) POST /api/v1/analyze -> 501 + ANALYZE_ENDPOINT_NOT_SUPPORTED.
 On failure: detect from logs, apply targeted fix, rebuild backend only, re-run (max 3 iterations).
 Writes %LOCALAPPDATA%\\AI_Mentor\\logs\\self_test.log.
 
@@ -278,17 +278,23 @@ def run_self_test(repo_root: Path, max_iterations: int = 3) -> int:
                     break
                 continue
 
-            # (5) POST /api/v1/analyze
+            # (5) POST /api/v1/analyze → 501 and ANALYZE_ENDPOINT_NOT_SUPPORTED (disabled by design)
             code, headers, body = _http_post(BASE_URL + "/api/v1/analyze", b"{}")
             raw_post = f"POST /api/v1/analyze -> {code} body={body.decode(errors='replace')[:500]}"
             append(raw_post)
-            if code != 200:
+            if code != 501:
                 append("failure_mode=analyze_failed")
                 if not _apply_fix("analyze_failed", repo_root, lines):
                     break
                 continue
             try:
-                json.loads(body.decode())
+                data = json.loads(body.decode())
+                err = (data or {}).get("error") or {}
+                if err.get("code") != "ANALYZE_ENDPOINT_NOT_SUPPORTED":
+                    append("analyze 501 missing ANALYZE_ENDPOINT_NOT_SUPPORTED")
+                    if not _apply_fix("analyze_failed", repo_root, lines):
+                        break
+                    continue
             except Exception:
                 append("analyze response not valid JSON")
                 if not _apply_fix("analyze_failed", repo_root, lines):
@@ -312,8 +318,8 @@ def run_self_test(repo_root: Path, max_iterations: int = 3) -> int:
     if passed:
         append("=== SELF-TEST PASS ===")
         append("backend_started=yes backend_bind_127.0.0.1_8000=yes")
-        append("health=200 preflight=200/204 CORS=yes post_analyze=200 valid_JSON=yes")
-        append("Desktop app can invoke Analyze without Failed to fetch (API verified).")
+        append("health=200 preflight=200/204 CORS=yes post_analyze=501 valid_JSON=yes")
+        append("Desktop app uses /pipeline/shadow/run; /api/v1/analyze returns 501 (not supported).")
     else:
         append("=== SELF-TEST FAIL ===")
         append("iterations=" + str(iteration) + " max=" + str(max_iterations))

@@ -16,6 +16,8 @@ from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
+# Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
+CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
 MARKETS = ("one_x_two", "over_under_25", "gg_ng")
 
 
@@ -52,8 +54,13 @@ async def build_evaluation_report(
         m: {"success_count": 0, "failure_count": 0, "neutral_count": 0} for m in MARKETS
     }
     bands_label = [f"{lo:.2f}-{hi:.2f}" for lo, hi in CONFIDENCE_BANDS]
+    bands_label_fine = [f"{lo:.2f}-{hi:.2f}" for lo, hi in CONFIDENCE_BANDS_FINE]
     per_market_bands: Dict[str, Dict[str, Dict[str, int]]] = {
         m: {b: {"success_count": 0, "failure_count": 0, "neutral_count": 0} for b in bands_label}
+        for m in MARKETS
+    }
+    per_market_bands_fine: Dict[str, Dict[str, Dict[str, int]]] = {
+        m: {b: {"success_count": 0, "failure_count": 0, "neutral_count": 0} for b in bands_label_fine}
         for m in MARKETS
     }
     reason_stats: Dict[str, Dict[str, Dict[str, int]]] = {}
@@ -95,6 +102,19 @@ async def build_evaluation_report(
                         per_market_bands[m][band]["failure_count"] += 1
                     else:
                         per_market_bands[m][band]["neutral_count"] += 1
+                band_fine = None
+                for lo, hi in CONFIDENCE_BANDS_FINE:
+                    if lo <= c < hi or (lo == 0.9 and c <= 1.0):
+                        band_fine = f"{lo:.2f}-{hi:.2f}"
+                        break
+                if band_fine and band_fine in per_market_bands_fine[m]:
+                    outcome = mo.get(m, "UNRESOLVED")
+                    if outcome == "SUCCESS":
+                        per_market_bands_fine[m][band_fine]["success_count"] += 1
+                    elif outcome == "FAILURE":
+                        per_market_bands_fine[m][band_fine]["failure_count"] += 1
+                    else:
+                        per_market_bands_fine[m][band_fine]["neutral_count"] += 1
 
         try:
             reason_json = json.loads(res.reason_codes_by_market_json) if isinstance(res.reason_codes_by_market_json, str) else (res.reason_codes_by_market_json or {})
@@ -139,6 +159,17 @@ async def build_evaluation_report(
                         **sb,
                         "accuracy": accuracy(sb["success_count"], sb["failure_count"]),
                     }
+        per_market_report[m]["confidence_bands_fine"] = {}
+        for b in bands_label_fine:
+            sb = per_market_bands_fine[m][b]
+            total = sb["success_count"] + sb["failure_count"] + sb["neutral_count"]
+            if total > 0:
+                per_market_report[m]["confidence_bands_fine"][b] = {
+                    **sb,
+                    "count": total,
+                    "accuracy": accuracy(sb["success_count"], sb["failure_count"]),
+                    "neutrals_rate": round(sb["neutral_count"] / total, 4),
+                }
 
     reason_effectiveness: Dict[str, Any] = {}
     for code, by_market in reason_stats.items():
