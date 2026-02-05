@@ -7,8 +7,9 @@ Returns PipelineReport; does not apply policy.
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,13 @@ from policy.policy_store import checksum_report
 from policy.tuner import run_tuner, PolicyProposal
 from policy.audit import audit_snapshots
 from services.result_attach_service import attach_result
+from ops.ops_events import (
+    log_pipeline_start,
+    log_pipeline_end,
+    log_ingestion_source,
+    log_evaluation_summary,
+    log_guardrail_trigger,
+)
 
 # Analyzer v2
 from analyzer.v2.engine import analyze_v2
@@ -64,6 +72,7 @@ async def run_shadow_pipeline(
     home = int(final_score.get("home", 0))
     away = int(final_score.get("away", 0))
 
+    t_start = log_pipeline_start(connector_name, match_id)
     evidence_pack: Optional[EvidencePack] = None
 
     if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
@@ -76,6 +85,8 @@ async def run_shadow_pipeline(
         with execution_mode_context("shadow"):
             adapter = get_connector_safe(connector_name)
         if not adapter:
+            log_guardrail_trigger("connector_not_found", f"{connector_name} not available or live IO not allowed")
+            log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="CONNECTOR_NOT_FOUND")
             return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
         # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)
         if connector_name in ("stub_platform", "stub_live_platform"):
@@ -85,10 +96,14 @@ async def run_shadow_pipeline(
             latency_ms = (time.perf_counter() - t0) * 1000
             record_request(success=ingested is not None, latency_ms=latency_ms)
         if not ingested:
+            log_guardrail_trigger("no_fixture", f"No fixture found for match_id={match_id!r}")
+            log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_FIXTURE")
             return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
         # Reuse same ensure logic for both connectors (same ingested data structure)
         await _ensure_sample_platform_match(session, ingested, now)
         evidence_pack = ingested_to_evidence_pack(ingested, captured_at_utc=now)
+        source = "recorded" if connector_name == "sample_platform" else "live"
+        log_ingestion_source(connector_name, source, match_id)
     else:
         if connector_name == "dummy":
             await _ensure_dummy_match(session, match_id, now)
@@ -102,8 +117,11 @@ async def run_shadow_pipeline(
         )
         pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run or hard_block_persistence)
         evidence_pack = pipeline_result.evidence_pack
+        log_ingestion_source(connector_name, "recorded", match_id)
 
     if not evidence_pack:
+        log_guardrail_trigger("no_evidence_pack", "Pipeline returned no evidence pack")
+        log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_EVIDENCE_PACK")
         return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack")
 
     ep_serialized = evidence_pack_to_serializable(evidence_pack)
@@ -133,6 +151,7 @@ async def run_shadow_pipeline(
     # Rollout/daily cap: if explicitly False, do not allow activation for this match
     if allow_activation_for_this_match is False and activation:
         activation_allowed_for_match = False
+        log_guardrail_trigger("activation_cap", "rollout or daily cap limited", cap_value=0)
         for dec in decisions_list:
             audit = await create_activation_audit(
                 session=session,
@@ -262,6 +281,15 @@ async def run_shadow_pipeline(
 
     # 5) Evaluation report (in-process)
     eval_report = await build_evaluation_report(session, limit=5000)
+    overall = eval_report.get("overall") or {}
+    match_count = int(overall.get("total_snapshots", 0))
+    resolved_count = int(overall.get("resolved_snapshots", 0))
+    accuracy_by_market: Dict[str, float] = {}
+    for m, data in (eval_report.get("per_market_accuracy") or {}).items():
+        acc = data.get("accuracy")
+        if acc is not None:
+            accuracy_by_market[m] = acc
+    log_evaluation_summary(match_count, resolved_count, accuracy_by_market if accuracy_by_market else None)
     evaluation_report_checksum = checksum_report(eval_report)
 
     # 6) Tuner (shadow)
@@ -321,6 +349,7 @@ async def run_shadow_pipeline(
     }
     if dry_run:
         report["dry_run"] = True
+    log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start)
     return report
 
 

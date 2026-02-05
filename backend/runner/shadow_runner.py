@@ -15,12 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ingestion.live_io import live_io_metrics_snapshot, live_writes_allowed, reset_metrics
 from guardrails.live_io_guardrails import evaluate as evaluate_live_io_guardrails
+from limits.limits import get_max_matches_per_run
 from pipeline.shadow_pipeline import run_shadow_pipeline
 from policy.policy_store import stable_json_dumps
 from repositories.raw_payload_repo import RawPayloadRepository
-
-# Hard cap for determinism and resource limits
-MAX_MATCHES_PER_RUN = 50
+from ops.ops_events import log_guardrail_trigger
 
 
 def _checksum(data: str | dict) -> str:
@@ -76,10 +75,12 @@ async def run_shadow_batch(
     if match_ids is None:
         match_ids = await _get_cached_match_ids(session, connector_name)
 
-    if len(match_ids) > MAX_MATCHES_PER_RUN:
+    max_matches = get_max_matches_per_run()
+    if len(match_ids) > max_matches:
+        log_guardrail_trigger("max_fixtures_per_run", f"Requested {len(match_ids)} matches; cap {max_matches}", cap_value=max_matches)
         return {
             "error": "MAX_MATCHES_EXCEEDED",
-            "detail": f"Requested {len(match_ids)} matches; maximum allowed is {MAX_MATCHES_PER_RUN}.",
+            "detail": f"Requested {len(match_ids)} matches; maximum allowed is {max_matches}.",
             "run_meta": None,
             "per_match": [],
             "aggregates": None,
