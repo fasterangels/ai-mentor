@@ -1,0 +1,15 @@
+{
+  "policy_version": "injury_news.v1",
+  "source_priority": {
+    "recorded_injury_news_v1": 1.0
+  },
+  "max_age_hours_by_claim_type": {
+    "INJURY_STATUS": 168,
+    "SUSPENSION": 168,
+    "RETURN": 168
+  },
+  "recency_half_life_hours": 24,
+  "min_confidence_to_consider": 0.5,
+  "conflict_epsilon": 0.05,
+  "conflict_behavior": "QUESTIONABLE"
+}

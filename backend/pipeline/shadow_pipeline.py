@@ -43,6 +43,14 @@ def _inj_news_enabled() -> bool:
     return os.environ.get("INJ_NEWS_ENABLED", "").strip().lower() in ("1", "true", "yes")
 
 
+def _inj_news_resolver_enabled() -> bool:
+    """True if INJ_NEWS_RESOLVER_ENABLED or INJ_NEWS_ENABLED is 1/true/yes (default False)."""
+    return (
+        os.environ.get("INJ_NEWS_RESOLVER_ENABLED", "").strip().lower() in ("1", "true", "yes")
+        or _inj_news_enabled()
+    )
+
+
 def _evidence_pack_to_dict(ep: EvidencePack) -> Dict[str, Any]:
     """Serializable dict for audit snapshots (roundtrip with evidence_pack_from_dict)."""
     return evidence_pack_to_serializable(ep)
@@ -78,9 +86,15 @@ async def run_shadow_pipeline(
     home = int(final_score.get("home", 0))
     away = int(final_score.get("away", 0))
 
+    injury_news_resolver_summary: Dict[str, Any] = {}
     if _inj_news_enabled():
         from ingestion.injury_news_adapter import run_recorded_injury_news_ingestion
         await run_recorded_injury_news_ingestion(session, now_utc=now)
+    if _inj_news_resolver_enabled():
+        from ingestion.injury_news_resolver import run_injury_news_resolver
+        injury_news_resolver_summary = await run_injury_news_resolver(
+            session, policy_version="injury_news.v1", now_utc=now
+        )
 
     t_start = log_pipeline_start(connector_name, match_id)
     evidence_pack: Optional[EvidencePack] = None
@@ -355,6 +369,7 @@ async def run_shadow_pipeline(
             "reason": activation_audits[0].get("activation_reason") if activation_audits and not activation_allowed_for_match else None,
             "audits": activation_audits,
         },
+        "injury_news_resolver": injury_news_resolver_summary,
     }
     if dry_run:
         report["dry_run"] = True
@@ -462,6 +477,8 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "evaluation_report_checksum": None,
         "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None},
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
+        "activation": {"activated": False, "reason": None, "audits": []},
+        "injury_news_resolver": {},
         "error": reason,
         "detail": detail,
     }
