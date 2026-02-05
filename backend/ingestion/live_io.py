@@ -91,9 +91,15 @@ def live_writes_allowed() -> bool:
     return os.environ.get("LIVE_WRITES_ALLOWED", "").strip().lower() in ("1", "true", "yes")
 
 
+def _real_provider_live_requested() -> bool:
+    """True if REAL_PROVIDER_LIVE env is set (real_provider treated as live and gated by LIVE_IO_ALLOWED)."""
+    return os.environ.get("REAL_PROVIDER_LIVE", "").strip().lower() in ("1", "true", "yes")
+
+
 def get_connector_safe(name: str) -> Optional[DataConnector]:
     """
     Return the connector only if it is safe to use under current policy:
+    - real_provider: when REAL_PROVIDER_LIVE=true, only when LIVE_IO_ALLOWED=true; otherwise always allowed (recorded).
     - RecordedPlatformAdapter: always allowed (recorded-first).
     - Other connectors: only when LIVE_IO_ALLOWED is true AND execution_mode is "shadow" AND recorded baseline exists.
     Raises ValueError if LIVE_IO_ALLOWED but not in shadow mode, or if baseline missing.
@@ -102,6 +108,8 @@ def get_connector_safe(name: str) -> Optional[DataConnector]:
     adapter = get_connector(name)
     if adapter is None:
         return None
+    if name == "real_provider" and _real_provider_live_requested():
+        return adapter if live_io_allowed() else None
     if isinstance(adapter, RecordedPlatformAdapter):
         return adapter
     if not live_io_allowed():

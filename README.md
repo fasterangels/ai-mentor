@@ -169,6 +169,33 @@ AI_Mentor/
 
 ---
 
+## Real provider connector (recorded-first)
+
+The **real_provider** connector integrates a real odds/matches provider in a recorded-first, live shadow–ready way.
+
+### Recorded fixtures workflow
+
+- Fixtures live in `backend/ingestion/fixtures/real_provider/` as JSON files (one per match).
+- Each file must include: `match_id`, `home_team`, `away_team`, `competition`, `kickoff_utc` (ISO8601 UTC), `odds_1x2` (`home`/`draw`/`away` > 0), `status`.
+- The shadow pipeline can use connector `real_provider` with **no network**: it reads only from these fixtures.
+- **Recorded-first rule:** The fixtures directory must exist and contain at least one valid fixture; the connector fails fast if fixtures are missing.
+
+### Enabling live shadow safely
+
+Live calls are **off by default**. To use the live path:
+
+1. Set **`REAL_PROVIDER_LIVE=true`** and **`LIVE_IO_ALLOWED=true`**.
+2. Set **`REAL_PROVIDER_BASE_URL`** (provider API base URL) and **`REAL_PROVIDER_API_KEY`** (API key). If either is missing, the connector fails fast.
+3. Read-only default: no writes unless **`LIVE_WRITES_ALLOWED=true`**.
+
+With live enabled, the connector still outputs the same normalized schema so downstream decisions stay deterministic.
+
+### Tests and network
+
+**Tests never call live endpoints.** All tests use fixtures or mocks; there is no external network in the test suite.
+
+---
+
 ## 🔧 Configuration (Optional)
 
 Create `backend/.env` file for custom settings:

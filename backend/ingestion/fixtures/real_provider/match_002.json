@@ -1,0 +1,13 @@
+{
+  "match_id": "real_provider_002",
+  "home_team": "Coast City",
+  "away_team": "Highland Town",
+  "competition": "Real Provider League",
+  "kickoff_utc": "2025-11-02T18:30:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 1.90,
+    "draw": 3.55,
+    "away": 3.90
+  }
+}
