@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # Align with evaluation/offline_eval
 MARKETS = ("one_x_two", "over_under_25", "gg_ng")
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
+# Finer bands for Phase E (0.00-0.10, 0.10-0.20, ..., 0.90-1.00); deterministic ordering
+CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
 
 # Default config for decay and suggestion thresholds
 DEFAULT_HALF_LIFE_RUNS = 50.0
@@ -173,6 +175,69 @@ def confidence_calibration(
     return out
 
 
+def confidence_calibration_fine(
+    records: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """Finer confidence bands (0.00-0.10, ..., 0.90-1.00): count, accuracy, neutrals rate per band per market."""
+    bands_label = [_band_label(lo, hi) for lo, hi in CONFIDENCE_BANDS_FINE]
+    per_market: Dict[str, Dict[str, Dict[str, Any]]] = {
+        m: {b: {"success_count": 0, "failure_count": 0, "neutral_count": 0, "predicted_confidence": _band_mid(lo, hi)}
+            for b, (lo, hi) in zip(bands_label, CONFIDENCE_BANDS_FINE)}
+        for m in MARKETS
+    }
+
+    for rec in records:
+        outcomes = rec.get("market_outcomes") or {}
+        preds = rec.get("predictions") or []
+        market_to_confidence: Dict[str, float] = {}
+        for p in preds:
+            market = (p.get("market") or "").strip()
+            key_map = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng", "one_x_two": "one_x_two", "over_under_25": "over_under_25", "gg_ng": "gg_ng"}
+            m = key_map.get(market.upper() if market else "", key_map.get(market, ""))
+            if m and m in MARKETS:
+                market_to_confidence[m] = float(p.get("confidence", 0) or 0)
+        for market in MARKETS:
+            outcome = outcomes.get(market, "UNRESOLVED")
+            c = market_to_confidence.get(market)
+            if c is None:
+                continue
+            band = None
+            for (lo, hi), bl in zip(CONFIDENCE_BANDS_FINE, bands_label):
+                if lo <= c < hi:
+                    band = bl
+                    break
+                if lo == 0.9 and c <= 1.0:
+                    band = bl
+                    break
+            if band and band in per_market[market]:
+                if outcome == "SUCCESS":
+                    per_market[market][band]["success_count"] += 1
+                elif outcome == "FAILURE":
+                    per_market[market][band]["failure_count"] += 1
+                else:
+                    per_market[market][band]["neutral_count"] += 1
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for m in MARKETS:
+        out[m] = {}
+        for b in bands_label:
+            d = per_market[m][b]
+            s, f, n = d["success_count"], d["failure_count"], d["neutral_count"]
+            total = s + f + n
+            accuracy = round(s / (s + f), 4) if (s + f) > 0 else None
+            neutrals_rate = round(n / total, 4) if total > 0 else 0.0
+            out[m][b] = {
+                "count": total,
+                "accuracy": accuracy,
+                "neutrals_rate": neutrals_rate,
+                "success_count": s,
+                "failure_count": f,
+                "neutral_count": n,
+                "predicted_confidence": d["predicted_confidence"],
+            }
+    return out
+
+
 def stability_metrics(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Pick flip rate and confidence volatility (p95 delta) across comparable runs."""
     by_match: Dict[str, List[Dict[str, Any]]] = {}
@@ -304,6 +369,7 @@ def compute_decision_quality_report(
     reason_eff = reason_effectiveness_over_time(records, half_life_runs=half_life)
     churn = reason_churn_metrics(records)
     calibration = confidence_calibration(records)
+    calibration_fine = confidence_calibration_fine(records)
     stability = stability_metrics(records)
     suggestions = build_suggestions(
         records,
@@ -321,6 +387,7 @@ def compute_decision_quality_report(
         "reason_effectiveness_over_time": reason_eff,
         "reason_churn": churn,
         "confidence_calibration": calibration,
+        "confidence_calibration_fine": calibration_fine,
         "stability": stability,
         "suggestions": suggestions,
     }

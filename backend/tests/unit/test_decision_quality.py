@@ -15,8 +15,10 @@ if str(_backend) not in sys.path:
 import pytest
 
 from offline_eval.decision_quality import (
+    CONFIDENCE_BANDS_FINE,
     build_suggestions,
     confidence_calibration,
+    confidence_calibration_fine,
     compute_decision_quality_report,
     reason_churn_metrics,
     reason_effectiveness_over_time,
@@ -47,6 +49,24 @@ def test_compute_decision_quality_report_deterministic() -> None:
     assert r1["reason_effectiveness_over_time"] == r2["reason_effectiveness_over_time"]
     assert r1["reason_churn"] == r2["reason_churn"]
     assert r1["stability"] == r2["stability"]
+    assert r1["confidence_calibration_fine"] == r2["confidence_calibration_fine"]
+
+
+def test_confidence_calibration_fine_deterministic_bands() -> None:
+    """Phase E: evaluator includes confidence_calibration_fine with deterministic band buckets (0.00-0.10, ..., 0.90-1.00)."""
+    expected_bands = [f"{i * 0.1:.2f}-{(i + 1) * 0.1:.2f}" for i in range(10)]
+    assert len(CONFIDENCE_BANDS_FINE) == 10
+    records = [
+        _record(1, "2025-01-01T12:00:00+00:00", "m1", {"one_x_two": "SUCCESS"}, {}, [{"market": "1X2", "pick": "home", "confidence": 0.35, "reasons": []}]),
+    ]
+    out = confidence_calibration_fine(records)
+    assert "one_x_two" in out
+    for band in expected_bands:
+        assert band in out["one_x_two"]
+        d = out["one_x_two"][band]
+        assert "count" in d
+        assert "accuracy" in d
+        assert "neutrals_rate" in d
 
 
 def test_reason_effectiveness_over_time_decay() -> None:

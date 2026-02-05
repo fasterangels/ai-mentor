@@ -87,7 +87,15 @@ def plan_from_quality_audit(
             "market": market,
             "old_val": old_mc,
             "new_val": new_mc,
+            "before_threshold": old_mc,
+            "after_threshold": new_mc,
             "reason": f"calibration deviation {deviation:.2f} (emp {emp:.2f} vs pred {pred:.2f}), n={count}",
+            "evaluation_metrics": {
+                "deviation": round(deviation, 4),
+                "empirical_accuracy": emp,
+                "predicted_confidence": pred,
+                "count": count,
+            },
         })
 
     # 2) reason dampening from effectiveness degradation
@@ -112,7 +120,14 @@ def plan_from_quality_audit(
             "reason_code": code,
             "old_val": old_val,
             "new_val": new_val,
+            "before_threshold": old_val,
+            "after_threshold": new_val,
             "reason": cand.get("suggestion", "effectiveness decay"),
+            "evaluation_metrics": {
+                "decayed_contribution": cand.get("decayed_contribution"),
+                "win_count": cand.get("win_count"),
+                "loss_count": cand.get("loss_count"),
+            },
         })
 
     proposed_policy = Policy(
