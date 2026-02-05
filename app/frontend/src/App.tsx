@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { getBackendBaseUrl, isTauri } from "./api/backendBaseUrl";
+import { runShadowPipeline, pipelineReportToAnalyzeResponse } from "./api/analyzer";
 import { mapApiToResultVM } from "./ui/result/mapper";
 import MatchHeader from "./ui/result/MatchHeader";
 import ResolverStatusCard from "./ui/result/ResolverStatusCard";
@@ -62,6 +63,7 @@ const getInitialApiBase = () => DEFAULT_API_BASE;
 const STORAGE_KEYS = {
   homeTeam: "ai-mentor.homeTeam",
   awayTeam: "ai-mentor.awayTeam",
+  matchId: "ai-mentor.matchId",
   filters: "ai-mentor.filters",
   lastResult: "ai-mentor.lastResult",
   snapshots: "ai-mentor.snapshots",
@@ -570,6 +572,7 @@ function buildReportHtml(params: {
 function App() {
   const [home, setHome] = useState(() => getStoredString(STORAGE_KEYS.homeTeam, "PAOK"));
   const [away, setAway] = useState(() => getStoredString(STORAGE_KEYS.awayTeam, "AEK"));
+  const [matchId, setMatchId] = useState(() => getStoredString(STORAGE_KEYS.matchId, "sample_platform_match_001"));
   const [result, setResult] = useState<AnalyzeResponse | null>(getStoredResult);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1264,6 +1267,7 @@ function App() {
       try {
         localStorage.setItem(STORAGE_KEYS.homeTeam, home);
         localStorage.setItem(STORAGE_KEYS.awayTeam, away);
+        localStorage.setItem(STORAGE_KEYS.matchId, matchId);
         localStorage.setItem(
           STORAGE_KEYS.filters,
           JSON.stringify({ marketFilter, kindFilter, flagFilter, searchText, sortBy })
@@ -1273,7 +1277,7 @@ function App() {
       }
     }, PERSIST_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [home, away, marketFilter, kindFilter, flagFilter, searchText, sortBy]);
+  }, [home, away, matchId, marketFilter, kindFilter, flagFilter, searchText, sortBy]);
 
   // Persist last successful result (cap size) (BLOCK 8.9)
   useEffect(() => {
@@ -1293,25 +1297,15 @@ function App() {
     setErrorKind(null);
     setHttpStatus(null);
     setLastErrorDebug(null);
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-    const signal = abortRef.current.signal;
-    const base = apiBase || (await getBackendBaseUrl());
-    if (!base) return;
-    const endpoint = `${base}/api/v1/analyze`;
+    const endpoint = `${apiBase || (await getBackendBaseUrl())}/api/v1/pipeline/shadow/run`;
     const timestamp = new Date().toISOString();
+    const pipelineMatchId = (matchId || "sample_platform_match_001").trim();
     const payload = {
-      home_text: home,
-      away_text: away,
-      window_hours: 8760,
-      mode: predictionMode,
-      markets: ["1X2", "OU25", "GGNG"],
-      policy: {
-        min_sep_1x2: 0.1,
-        min_sep_ou: 0.08,
-        min_sep_gg: 0.08,
-        min_confidence: 0.62,
-      },
+      connector_name: "sample_platform",
+      match_id: pipelineMatchId,
+      final_home_goals: 0,
+      final_away_goals: 0,
+      status: "FINAL",
     };
 
     setLastRunMeta({
@@ -1322,66 +1316,31 @@ function App() {
       mode: predictionMode,
     });
 
-    const doFetch = (): Promise<Response> =>
-      fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(payload),
-        signal,
-      });
-
     const isNetworkErr = (e: unknown): boolean => {
       const msg = e instanceof Error ? e.message : String(e);
       return msg === "Failed to fetch" || /econnrefused|network/i.test(String(msg));
     };
 
     try {
-      let res: Response | null = null;
-      let lastErr: unknown = null;
-
-      for (let retry = 0; retry < 4; retry++) {
-        try {
-          res = await doFetch();
-          lastErr = null;
-          break;
-        } catch (e: unknown) {
-          if ((e as { name?: string })?.name === "AbortError") return;
-          lastErr = e;
-          if (!isNetworkErr(e) || retry >= 3) throw e;
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
-
-      if (lastErr) throw lastErr;
-      if (!res) throw new Error("No response");
-
-      const responseText = await res.text();
-      const responsePreview = responseText.slice(0, 2048);
-      setHttpStatus(res.status);
-
-      let data: AnalyzeResponse = {};
-      try {
-        data = responseText ? (JSON.parse(responseText) as AnalyzeResponse) : {};
-      } catch {
-        data = {};
-      }
-
-      if (!res.ok) {
+      const report = await runShadowPipeline(payload);
+      setHttpStatus(200);
+      if (report.error) {
         setResult(null);
         setErrorKind("HTTP_ERROR");
-        const msg =
-          typeof (data as { detail?: string }).detail === "string"
-            ? (data as { detail: string }).detail
-            : typeof (data as { message?: string }).message === "string"
-              ? (data as { message: string }).message
-              : null;
-        setErrorMessage(msg ? `HTTP ${res.status}: ${msg}` : `HTTP ${res.status}: ${JSON.stringify(data)}`);
-        setLastErrorDebug({ httpStatus: res.status, endpoint, timestamp, home, away, responsePreview });
+        setErrorMessage(report.detail || report.error);
+        setLastErrorDebug({
+          httpStatus: 200,
+          endpoint,
+          timestamp,
+          home,
+          away,
+          responsePreview: JSON.stringify({ error: report.error, detail: report.detail }).slice(0, 2048),
+        });
         return;
       }
-
+      const adapted = pipelineReportToAnalyzeResponse(report, pipelineMatchId) as AnalyzeResponse;
       setErrorKind(null);
-      setResult(data);
+      setResult(adapted);
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === "AbortError") return;
       setResult(null);
@@ -1393,11 +1352,7 @@ function App() {
         String(msg).toLowerCase().includes("econnrefused") ||
         String(msg).toLowerCase().includes("network");
       setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
-      setErrorMessage(
-        isNetwork
-          ? t("error.network")
-          : msg
-      );
+      setErrorMessage(isNetwork ? t("error.network") : msg);
       setLastErrorDebug({
         httpStatus: null,
         endpoint,
@@ -1408,7 +1363,6 @@ function App() {
       });
     } finally {
       setLoading(false);
-      abortRef.current = null;
     }
   };
 
@@ -1799,6 +1753,8 @@ function App() {
           onAwayTeamChange={setAway}
           dateTime={kickoff}
           onDateTimeChange={setKickoff}
+          matchId={matchId}
+          onMatchIdChange={setMatchId}
           disabled={loading}
         />
 
@@ -1808,9 +1764,9 @@ function App() {
             onClick={runAnalyze}
             disabled={loading || !backendReady}
             aria-busy={loading}
-            aria-label={loading ? t("btn.analyzing") : t("btn.analyze")}
+            aria-label={loading ? t("btn.analyzing") : t("btn.run_shadow_pipeline")}
           >
-            {loading ? t("btn.analyzing") : t("btn.analyze")}
+            {loading ? t("btn.analyzing") : t("btn.run_shadow_pipeline")}
           </button>
           {loading && (
             <button

@@ -112,6 +112,14 @@ function normalizeEvaluation(api: Record<string, unknown>): EvaluationKPI[] {
   try {
     const evaluationV2 = api.evaluation_v2 as Record<string, unknown> | undefined;
     if (evaluationV2 != null && typeof evaluationV2 === "object") {
+      const checksum = evaluationV2.evaluation_report_checksum;
+      if (checksum != null && typeof checksum === "string" && checksum.length > 0) {
+        out.push({
+          label: "Evaluation checksum",
+          value: checksum.length > 12 ? `${checksum.slice(0, 12)}…` : checksum,
+          source: "evaluation_v2",
+        });
+      }
       const runtimeMs = safeNum(evaluationV2.analyzer_runtime_ms);
       if (runtimeMs != null) {
         out.push({
