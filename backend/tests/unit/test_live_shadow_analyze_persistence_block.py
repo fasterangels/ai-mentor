@@ -34,6 +34,7 @@ async def test_hard_block_persistence_skips_db_writes() -> None:
          patch("pipeline.shadow_pipeline.build_evaluation_report") as mock_eval, \
          patch("pipeline.shadow_pipeline.run_tuner") as mock_tuner, \
          patch("pipeline.shadow_pipeline.audit_snapshots") as mock_audit, \
+         patch("pipeline.shadow_pipeline.run_replay") as mock_replay, \
          patch("pipeline.shadow_pipeline._ensure_dummy_match") as mock_ensure:
         mock_ep = EvidencePack(
             match_id="test_match",
@@ -49,6 +50,7 @@ async def test_hard_block_persistence_skips_db_writes() -> None:
         mock_eval.return_value = {}
         mock_tuner.return_value = MagicMock(proposed_policy=MagicMock(model_dump=lambda **kw: {}), diffs=[], guardrails_results=[])
         mock_audit.return_value = {"summary": {"changed_count": 0, "per_market_change_count": {}}, "snapshots_checksum": "", "current_policy_checksum": "", "proposed_policy_checksum": ""}
+        mock_replay.return_value = {"replay_result": "PASS", "current_counts_by_market": {}, "proposed_counts_by_market": {}}
         mock_ensure.return_value = None
 
         report = await run_shadow_pipeline(
