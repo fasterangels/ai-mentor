@@ -39,7 +39,8 @@ curl.exe -i -X POST "http://127.0.0.1:8000/api/v1/analyze" ^
 ```
 
 **Expected:**
-- Status: **200 OK** with JSON body (analysis result or NO_PREDICTION; either is fine)
+- /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run.
+- Status: **501 Not Implemented** with JSON body `{"error":{"code":"ANALYZE_ENDPOINT_NOT_SUPPORTED",...}}`
 - No CORS or network errors
 
 ## 4) Browser test

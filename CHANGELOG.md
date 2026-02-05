@@ -4,7 +4,7 @@
 
 ### Features
 
-- **Analyzer & analysis API** — POST /api/v1/analyze with resolver and analyzer outcomes.
+- **Analyzer & analysis API** — /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run. Analysis runs inside the pipeline (resolver + analyzer outcomes).
 - **Shadow modes** — Live shadow compare and live shadow analyze (read-only unless LIVE_WRITES_ALLOWED).
 - **Activation gates** — Kill-switch, burn-in mode, optional activation with guardrails.
 - **Burn-in ops** — Single pipeline: ingestion → compare → analyze → optional activation; report bundles under reports/burn_in/.
