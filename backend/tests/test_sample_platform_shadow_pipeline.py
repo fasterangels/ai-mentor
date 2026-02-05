@@ -53,6 +53,8 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
         )
 
     assert report.get("error") is None
+    assert report.get("schema_version") == "report.v1"
+    assert report.get("canonical_flow") == "/pipeline/shadow/run"
     assert "ingestion" in report
     assert report["ingestion"].get("payload_checksum") is not None
     assert "analysis" in report
