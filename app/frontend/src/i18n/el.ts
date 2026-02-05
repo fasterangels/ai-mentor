@@ -215,6 +215,7 @@ export const el: Record<string, string> = {
   "backend.status_ready": "Έτοιμο",
   "backend.status_starting": "Ξεκινά…",
   "backend.status_not_ready": "Δεν είναι έτοιμο",
+  "analysis.shadow_pipeline_hint": "Εκτέλεση Shadow Pipeline μέσω /pipeline/shadow/run.",
   "analysis.home_team_placeholder": "Ομάδα γηπέδου",
   "analysis.away_placeholder": "Αντίπαλος",
   "filter.market": "Αγορά",
