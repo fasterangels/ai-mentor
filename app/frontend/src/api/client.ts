@@ -30,7 +30,7 @@ const FORBIDDEN_ANALYZE_PATH = "/api/v1/analyze";
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   if (normalized.includes(FORBIDDEN_ANALYZE_PATH)) {
-    throw new Error("Not supported; use /pipeline/shadow/run.");
+    throw new Error("Not supported: /api/v1/analyze. Use /pipeline/shadow/run.");
   }
   const res = await fetch(`${getBase()}${normalized}`, {
     method: "POST",

@@ -43,6 +43,7 @@ export default function MatchSelectorPanel({
         <div>
           <h2 className="ai-matchPanel__title">{t("analysis.title")}</h2>
           <p className="ai-matchPanel__subtitle">{t("home.welcome_title")}</p>
+          <p className="ai-matchPanel__hint ai-muted" style={{ fontSize: 12, marginTop: 4 }}>{t("analysis.shadow_pipeline_hint")}</p>
         </div>
         <SegmentedControl
           value={mode}
