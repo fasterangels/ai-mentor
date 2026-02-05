@@ -7,11 +7,13 @@ from typing import Any, Dict, Optional
 from ingestion.connectors.platform_base import DataConnector
 from ingestion.connectors.real_provider_2 import RealProvider2Adapter
 from ingestion.connectors.sample_platform import SamplePlatformAdapter
+from ingestion.connectors.sample_recorded_platform_v2 import SampleRecordedPlatformV2Adapter
 from ingestion.connectors.stub_platform import StubPlatformAdapter
 from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
 
 _REGISTRY: Dict[str, DataConnector] = {
     "sample_platform": SamplePlatformAdapter(),
+    "sample_recorded_platform_v2": SampleRecordedPlatformV2Adapter(),
     "stub_platform": StubPlatformAdapter(),
     "stub_live_platform": StubLivePlatformAdapter(),
     "real_provider_2": RealProvider2Adapter(),
