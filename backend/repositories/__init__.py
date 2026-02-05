@@ -20,6 +20,9 @@ from .analysis_run_repo import AnalysisRunRepository
 from .prediction_repo import PredictionRepository
 from .prediction_outcome_repo import PredictionOutcomeRepository
 from .snapshot_resolution_repo import SnapshotResolutionRepository
+from .injury_news_report_repo import InjuryNewsReportRepository
+from .injury_news_claim_repo import InjuryNewsClaimRepository
+from .injury_news_resolution_repo import InjuryNewsResolutionRepository
 
 __all__ = [
     "BaseRepository",
@@ -35,4 +38,7 @@ __all__ = [
     "PredictionRepository",
     "PredictionOutcomeRepository",
     "SnapshotResolutionRepository",
+    "InjuryNewsReportRepository",
+    "InjuryNewsClaimRepository",
+    "InjuryNewsResolutionRepository",
 ]
