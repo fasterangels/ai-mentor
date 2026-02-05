@@ -19,14 +19,14 @@ def _sample_path():
     return Path(__file__).resolve().parent / "fixtures" / "contracts" / "report.v1.sample.json"
 
 def test_report_v1_sample_passes_schema():
-    with open(_schema_path(), encoding="utf-8") as f:
+    with open(_schema_path(), encoding="utf-8-sig") as f:
         schema = json.load(f)
-    with open(_sample_path(), encoding="utf-8") as f:
+    with open(_sample_path(), encoding="utf-8-sig") as f:
         sample = json.load(f)
     jsonschema.validate(instance=sample, schema=schema)
 
 def test_report_has_required_fields_snapshot_stability():
-    with open(_sample_path(), encoding="utf-8") as f:
+    with open(_sample_path(), encoding="utf-8-sig") as f:
         sample = json.load(f)
     for key in REQUIRED_TOP_LEVEL:
         assert key in sample, f"Required key {key!r} missing from contract sample"
@@ -67,7 +67,7 @@ async def test_pipeline_report_validates_against_report_v1_schema(test_db):
             status="FINAL",
             now_utc=datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
         )
-    with open(_schema_path(), encoding="utf-8") as f:
+    with open(_schema_path(), encoding="utf-8-sig") as f:
         schema = json.load(f)
     jsonschema.validate(instance=report, schema=schema)
     for key in REQUIRED_TOP_LEVEL:
