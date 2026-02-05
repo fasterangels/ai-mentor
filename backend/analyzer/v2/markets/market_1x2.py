@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..contracts import (
     DecisionKind,
@@ -12,6 +12,7 @@ from ..contracts import (
     Selection1X2,
 )
 from ..gates import should_downgrade_to_no_bet
+from ..reason_codes import H2H_USED, TOP_SEP, MISSING_STATS
 
 HOME_ADVANTAGE = 0.15
 MIN_SEP_1X2 = 0.10
@@ -28,6 +29,7 @@ def score_1x2(
     Gates already run; if hard gate blocked, caller uses NO_PREDICTION.
     """
     reasons: List[str] = []
+    reason_codes_1x2: List[str] = []
     flags: List[str] = []
     evidence_refs: List[str] = []
 
@@ -38,6 +40,7 @@ def score_1x2(
             selection=None,
             confidence=None,
             reasons=["Missing stats for 1X2"],
+            reason_codes=[MISSING_STATS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -60,6 +63,7 @@ def score_1x2(
         home_net += (home_h2h - 0.5) * 0.1
         away_net += (away_h2h - 0.5) * 0.1
         reasons.append("H2H used")
+        reason_codes_1x2.append(H2H_USED)
         evidence_refs.append("stats.head_to_head")
 
     scores = {
@@ -78,6 +82,7 @@ def score_1x2(
 
     confidence = min(1.0, max(0.0, 0.5 + separation * 2.0))
     reasons.append(f"top={top_sel} sep={separation:.2f}")
+    reason_codes_1x2.append(TOP_SEP)
 
     if separation < MIN_SEP_1X2:
         return _decision(
@@ -86,6 +91,7 @@ def score_1x2(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_1x2[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -101,6 +107,7 @@ def score_1x2(
             selection=None,
             confidence=confidence,
             reasons=reasons[:MAX_DECISION_REASONS],
+            reason_codes=reason_codes_1x2[:MAX_DECISION_REASONS],
             flags=flags,
             evidence_refs=evidence_refs,
         )
@@ -111,6 +118,7 @@ def score_1x2(
         selection=top_sel.value if hasattr(top_sel, "value") else top_sel,
         confidence=confidence,
         reasons=reasons[:MAX_DECISION_REASONS],
+        reason_codes=reason_codes_1x2[:MAX_DECISION_REASONS],
         flags=flags,
         evidence_refs=evidence_refs,
     )
@@ -133,7 +141,9 @@ def _decision(
     reasons: List[str],
     flags: List[str],
     evidence_refs: List[str],
+    reason_codes: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    from ..reason_codes import codes_for_reasons
     out: Dict[str, Any] = {
         "market": market,
         "decision": kind,
@@ -143,6 +153,10 @@ def _decision(
         "policy_version": POLICY_VERSION_V2,
         "meta": {},
     }
+    if reason_codes is not None:
+        out["reason_codes"] = reason_codes[:MAX_DECISION_REASONS]
+    else:
+        out["reason_codes"] = codes_for_reasons(reasons[:MAX_DECISION_REASONS])
     if selection is not None:
         out["selection"] = selection
     if confidence is not None:
