@@ -1,24 +1,26 @@
-"""POST /api/v1/analyze — resolver + pipeline + analyzer flow."""
+"""POST /api/v1/analyze — disabled by design (501). Use /pipeline/shadow/run instead."""
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.dependencies import get_db_session
-from services.analysis_service import run_analysis_flow
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
+ANALYZE_501_PAYLOAD = {
+    "error": {
+        "code": "ANALYZE_ENDPOINT_NOT_SUPPORTED",
+        "message": "This endpoint is intentionally not supported. Use /pipeline/shadow/run.",
+        "remediation": {
+            "endpoint": "/pipeline/shadow/run",
+            "notes": "The analyzer is designed to run inside the pipeline execution model.",
+        },
+    },
+}
 
-@router.post("/analyze")
-async def post_analyze(
-    body: dict,
-    session: AsyncSession = Depends(get_db_session),
-) -> dict:
+
+@router.post("/analyze", include_in_schema=False)
+async def post_analyze() -> JSONResponse:
     """
-    Accept JSON: home_text, away_text, kickoff_hint_utc?, window_hours?, competition_id?, mode?, markets?, policy?.
-    Return 200 with status OK | NO_PREDICTION | AMBIGUOUS | NOT_FOUND, match_id, resolver, evidence_pack?, analyzer?.
+    Disabled by design. Always returns 501.
+    Use /pipeline/shadow/run for analyzer execution inside the pipeline.
     """
-    if not isinstance(body, dict):
-        body = {}
-    result = await run_analysis_flow(session, body)
-    return result
+    return JSONResponse(status_code=501, content=ANALYZE_501_PAYLOAD)
