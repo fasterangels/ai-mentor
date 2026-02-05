@@ -21,7 +21,14 @@ from policy.policy_runtime import get_active_policy, min_confidence_from_policy
 from policy.policy_store import checksum_report
 from policy.tuner import run_tuner, PolicyProposal
 from policy.audit import audit_snapshots
+from pipeline.report_schema import (
+    CANONICAL_FLOW_SHADOW_RUN,
+    REPORT_SCHEMA_VERSION,
+    get_validate_strict,
+    validate_report_schema,
+)
 from services.result_attach_service import attach_result
+from version import get_version as get_app_version
 from ops.ops_events import (
     log_pipeline_start,
     log_pipeline_end,
@@ -315,6 +322,10 @@ async def run_shadow_pipeline(
             }
 
     report: Dict[str, Any] = {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "canonical_flow": CANONICAL_FLOW_SHADOW_RUN,
+        "generated_at": now.isoformat(),
+        "app_version": get_app_version(),
         "ingestion": {
             "payload_checksum": payload_checksum,
             "collected_at": collected_at,
@@ -348,6 +359,10 @@ async def run_shadow_pipeline(
     }
     if dry_run:
         report["dry_run"] = True
+    passed, validation_errors = validate_report_schema(report, strict=get_validate_strict())
+    if not passed and get_validate_strict():
+        log_guardrail_trigger("report_schema_validation_failed", "; ".join(validation_errors))
+        raise ValueError(f"Report schema validation failed: {'; '.join(validation_errors)}")
     log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start)
     return report
 
@@ -446,6 +461,10 @@ async def _ensure_dummy_match(session: AsyncSession, match_id: str, kickoff: dat
 
 def _error_report(reason: str, detail: str) -> Dict[str, Any]:
     return {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "canonical_flow": CANONICAL_FLOW_SHADOW_RUN,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "app_version": get_app_version(),
         "ingestion": {"payload_checksum": None, "collected_at": None},
         "analysis": {"snapshot_id": None, "markets_picks_confidences": {}},
         "resolution": {"market_outcomes": {}},
