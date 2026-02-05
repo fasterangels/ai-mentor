@@ -149,10 +149,13 @@ async def build_injury_news_shadow_summary(
     reasons, evidence_pointers = _build_shadow_reasons_and_evidence(
         resolutions, features, policy_version, max_reasons=max_reasons
     )
+    teams_with_any_resolution = len(set(r.get("team_ref") for r in resolutions if r.get("team_ref")))
     return {
         "enabled": True,
         "policy_version": policy_version,
         "resolutions_count": len(resolutions),
+        "team_refs_requested": len(team_refs),
+        "teams_with_any_resolution": teams_with_any_resolution,
         "features": {
             "out_count": features["out_count"],
             "questionable_count": features["questionable_count"],

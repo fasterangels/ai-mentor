@@ -68,6 +68,47 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
     assert "snapshots_checksum" in report["audit"]
     assert "injury_news_shadow_summary" in report
     assert isinstance(report["injury_news_shadow_summary"], dict)
+    assert "injury_evaluation_summary" in report
+    assert isinstance(report["injury_evaluation_summary"], dict)
+    assert "coverage" in report["injury_evaluation_summary"]
+    assert "conflicts" in report["injury_evaluation_summary"]
+    assert "reasons_emitted_counts" in report["injury_evaluation_summary"]
+
+
+@pytest.mark.asyncio
+async def test_shadow_pipeline_injury_evaluation_summary_with_attach_enabled(test_db) -> None:
+    """With INJ_NEWS_SHADOW_ATTACH_ENABLED=1, report contains injury_evaluation_summary with stable keys."""
+    import os
+    now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    prev = os.environ.get("INJ_NEWS_SHADOW_ATTACH_ENABLED")
+    try:
+        os.environ["INJ_NEWS_SHADOW_ATTACH_ENABLED"] = "1"
+        async with get_database_manager().session() as session:
+            report = await run_shadow_pipeline(
+                session,
+                connector_name="sample_platform",
+                match_id="sample_platform_match_001",
+                final_score={"home": 2, "away": 1},
+                status="FINAL",
+                now_utc=now,
+            )
+        assert report.get("error") is None
+        s = report.get("injury_evaluation_summary")
+        assert s is not None
+        assert "coverage" in s
+        assert "fixtures_with_injury_shadow" in s["coverage"]
+        assert "teams_with_any_resolution" in s["coverage"]
+        assert "teams_with_no_resolution" in s["coverage"]
+        assert "conflicts" in s
+        assert "conflicts_count" in s["conflicts"]
+        assert "conflicts_rate" in s["conflicts"]
+        assert "reasons_emitted_counts" in s
+        assert "staleness" in s
+    finally:
+        if prev is None:
+            os.environ.pop("INJ_NEWS_SHADOW_ATTACH_ENABLED", None)
+        else:
+            os.environ["INJ_NEWS_SHADOW_ATTACH_ENABLED"] = prev
 
 
 @pytest.mark.asyncio

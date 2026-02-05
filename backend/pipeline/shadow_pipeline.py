@@ -367,6 +367,9 @@ async def run_shadow_pipeline(
         report["injury_news_shadow_summary"] = injury_summary
     else:
         report["injury_news_shadow_summary"] = {}
+    # Injury evaluation summary (from shadow summary; evaluation/reporting only)
+    from evaluation.injury_taxonomy import compute_injury_evaluation_summary
+    report["injury_evaluation_summary"] = compute_injury_evaluation_summary(report.get("injury_news_shadow_summary") or {})
     if dry_run:
         report["dry_run"] = True
     log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start)
@@ -475,6 +478,12 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
         "activation": {"activated": False, "reason": None, "audits": []},
         "injury_news_shadow_summary": {},
+        "injury_evaluation_summary": {
+            "coverage": {"fixtures_with_injury_shadow": 0, "teams_with_any_resolution": 0, "teams_with_no_resolution": 0},
+            "conflicts": {"conflicts_count": 0, "conflicts_rate": 0.0},
+            "staleness": {"stale_count": 0, "note": "needs claim timestamps linkage"},
+            "reasons_emitted_counts": {},
+        },
         "error": reason,
         "detail": detail,
     }
