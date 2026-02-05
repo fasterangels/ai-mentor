@@ -79,7 +79,15 @@ async def run_shadow_pipeline(
         # Recorded fixtures (sample_platform) or live stubs/real_provider via get_connector_safe
         # Live connectors require LIVE_IO_ALLOWED=true and execution_mode=shadow with recorded baseline
         import time
-        from ingestion.live_io import execution_mode_context, get_connector_safe, record_request
+        from ingestion.live_io import (
+            LiveIOCircuitOpenError,
+            LiveIOFailureError,
+            LiveIORateLimitedError,
+            LiveIOTimeoutError,
+            execution_mode_context,
+            get_connector_safe,
+            record_request,
+        )
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
         with execution_mode_context("shadow"):
@@ -91,8 +99,11 @@ async def run_shadow_pipeline(
         # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform/real_provider recorded path)
         if connector_name in ("stub_platform", "stub_live_platform"):
             t0 = time.perf_counter()
-        ingested = adapter.fetch_match_data(match_id)
-        if connector_name in ("stub_platform", "stub_live_platform"):
+        try:
+            ingested = adapter.fetch_match_data(match_id)
+        except (LiveIOTimeoutError, LiveIORateLimitedError, LiveIOFailureError, LiveIOCircuitOpenError):
+            return _error_report("LIVE_IO_ERROR", "Live IO request failed (timeout, rate limit, server error, or circuit open)")
+        if connector_name == "stub_platform":
             latency_ms = (time.perf_counter() - t0) * 1000
             record_request(success=ingested is not None, latency_ms=latency_ms)
         if not ingested:

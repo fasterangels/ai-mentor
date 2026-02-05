@@ -93,12 +93,10 @@ async def test_shadow_batch_includes_live_io_metrics_and_alerts_empty_under_stub
     """Shadow batch report includes live_io_metrics and live_io_alerts; under normal stub conditions alerts are empty."""
     with pytest.MonkeyPatch.context() as m:
         m.setenv("LIVE_IO_ALLOWED", "1")
+        m.setenv("STUB_LIVE_MODE", "ok")
         adapter = StubLivePlatformAdapter()
-        def patched_get(path: str):
-            r = stub_client.get(path)
-            r.raise_for_status()
-            return r.json()
-        adapter._get = patched_get
+        adapter._base_url = "http://testserver"
+        adapter._client = stub_client
         from ingestion.registry import get_connector
         from runner.shadow_runner import run_shadow_batch
         original = get_connector("stub_live_platform")

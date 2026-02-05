@@ -89,7 +89,7 @@ def test_get_connector_safe_recorded_allowed_without_live_io() -> None:
 
 def test_get_connector_safe_live_blocked_without_live_io() -> None:
     """Non-recorded connector is None when LIVE_IO_ALLOWED is false (patch registry lookup)."""
-    with patch("ingestion.live_io.get_connector", return_value=_FakeLiveConnector()):
+    with patch("ingestion.registry.get_connector", return_value=_FakeLiveConnector()):
         with pytest.MonkeyPatch.context() as m:
             m.setenv("LIVE_IO_ALLOWED", "0")
             adapter = get_connector_safe("any_name")

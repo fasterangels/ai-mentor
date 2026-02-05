@@ -16,7 +16,96 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ingestion.connectors.platform_base import DataConnector, RecordedPlatformAdapter
-from ingestion.registry import get_connector
+
+
+class LiveIOTimeoutError(Exception):
+    """Raised when a live IO request times out."""
+
+
+class LiveIORateLimitedError(Exception):
+    """Raised when the server returns 429 Rate Limited."""
+
+
+class LiveIOFailureError(Exception):
+    """Raised when the server returns 5xx or other failure."""
+
+
+class LiveIOCircuitOpenError(Exception):
+    """Raised when the circuit breaker is open and the request is skipped."""
+
+
+# --- Circuit breaker (deterministic, no randomness) ---
+_circuit_state: str = "closed"  # closed | open | half_open
+_circuit_failures: int = 0
+_circuit_open_since: Optional[float] = None
+
+
+def _circuit_failure_threshold() -> int:
+    try:
+        v = os.environ.get("LIVE_IO_CIRCUIT_FAILURE_THRESHOLD")
+        if v is not None and v.strip():
+            return max(1, int(v.strip()))
+    except ValueError:
+        pass
+    return 3
+
+
+def _circuit_reset_seconds() -> float:
+    try:
+        v = os.environ.get("LIVE_IO_CIRCUIT_RESET_SECONDS")
+        if v is not None and v.strip():
+            return max(0.1, float(v.strip()))
+    except ValueError:
+        pass
+    return 60.0
+
+
+def circuit_breaker_allow_request() -> bool:
+    """
+    True if a request is allowed (closed or half_open after reset).
+    When open and reset time has passed, transition to half_open and allow one request.
+    """
+    global _circuit_state, _circuit_open_since
+    if _circuit_state == "closed":
+        return True
+    if _circuit_state == "half_open":
+        return True
+    # open
+    if _circuit_open_since is not None and _circuit_reset_seconds() > 0:
+        elapsed = time.monotonic() - _circuit_open_since
+        if elapsed >= _circuit_reset_seconds():
+            _circuit_state = "half_open"
+            _circuit_open_since = None
+            return True
+    return False
+
+
+def circuit_breaker_record_success() -> None:
+    """Record success: reset failure count and close circuit."""
+    global _circuit_state, _circuit_failures
+    _circuit_failures = 0
+    _circuit_state = "closed"
+
+
+def circuit_breaker_record_failure() -> None:
+    """Record failure: increment count; open circuit when threshold reached."""
+    global _circuit_state, _circuit_failures, _circuit_open_since
+    _circuit_failures = _circuit_failures + 1
+    if _circuit_failures >= _circuit_failure_threshold():
+        _circuit_state = "open"
+        _circuit_open_since = time.monotonic()
+    elif _circuit_state == "half_open":
+        _circuit_state = "open"
+        _circuit_open_since = time.monotonic()
+
+
+def circuit_breaker_reset() -> None:
+    """Reset circuit state (for tests)."""
+    global _circuit_state, _circuit_failures, _circuit_open_since
+    _circuit_state = "closed"
+    _circuit_failures = 0
+    _circuit_open_since = None
+
 
 # Execution mode: "shadow" = allowed to use live IO (with baseline); anything else = not allowed when LIVE_IO_ALLOWED.
 _EXECUTION_MODE: ContextVar[Optional[str]] = ContextVar("live_io_execution_mode", default=None)
@@ -105,6 +194,7 @@ def get_connector_safe(name: str) -> Optional[DataConnector]:
     Raises ValueError if LIVE_IO_ALLOWED but not in shadow mode, or if baseline missing.
     Returns None if not found or not allowed (e.g. LIVE_IO_ALLOWED false).
     """
+    from ingestion.registry import get_connector
     adapter = get_connector(name)
     if adapter is None:
         return None
