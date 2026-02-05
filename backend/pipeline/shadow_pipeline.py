@@ -296,6 +296,7 @@ async def run_shadow_pipeline(
             accuracy_by_market[m] = acc
     log_evaluation_summary(match_count, resolved_count, accuracy_by_market if accuracy_by_market else None)
     evaluation_report_checksum = checksum_report(eval_report)
+    calibration_summary = (eval_report.get("calibration_summary") or {})
 
     # 6) Tuner (shadow)
     proposal: PolicyProposal = run_tuner(eval_report)
@@ -334,6 +335,7 @@ async def run_shadow_pipeline(
             "market_outcomes": market_outcomes,
         },
         "evaluation_report_checksum": evaluation_report_checksum,
+        "calibration_summary": calibration_summary,
         "proposal": {
             "diffs": [list(d) for d in proposal.diffs],
             "guardrails_results": [list(g) for g in proposal.guardrails_results],
@@ -484,6 +486,7 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
             "staleness": {"stale_count": 0, "note": "needs claim timestamps linkage"},
             "reasons_emitted_counts": {},
         },
+        "calibration_summary": {"confidence_bands": {}, "brier_scores": {"brier_by_market": {}, "brier_overall": None}},
         "error": reason,
         "detail": detail,
     }

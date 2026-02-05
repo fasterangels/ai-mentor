@@ -73,6 +73,10 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
     assert "coverage" in report["injury_evaluation_summary"]
     assert "conflicts" in report["injury_evaluation_summary"]
     assert "reasons_emitted_counts" in report["injury_evaluation_summary"]
+    assert "calibration_summary" in report
+    assert isinstance(report["calibration_summary"], dict)
+    assert "confidence_bands" in report["calibration_summary"]
+    assert "brier_scores" in report["calibration_summary"]
 
 
 @pytest.mark.asyncio
