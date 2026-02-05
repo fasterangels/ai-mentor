@@ -46,7 +46,7 @@ class _FakeLiveConnector(DataConnector):
 
 def test_live_io_in_non_shadow_mode_fails_fast() -> None:
     """A) Live IO when LIVE_IO_ALLOWED=true and execution_mode != 'shadow' raises exact error."""
-    with patch("ingestion.live_io.get_connector", return_value=_FakeLiveConnector()):
+    with patch("ingestion.registry.get_connector", return_value=_FakeLiveConnector()):
         with pytest.MonkeyPatch.context() as m:
             m.setenv("LIVE_IO_ALLOWED", "1")
             # Ensure we are not in shadow mode (default)
@@ -62,7 +62,7 @@ def test_live_io_in_non_shadow_mode_fails_fast() -> None:
 def test_live_io_in_shadow_mode_without_recorded_baseline_fails_fast() -> None:
     """B) Live IO in shadow mode without recorded baseline (no fixtures dir / empty) fails fast."""
     # Use a path that is not a directory so assert_recorded_baseline_exists fails
-    with patch("ingestion.live_io.get_connector", return_value=_FakeLiveConnector()):
+    with patch("ingestion.registry.get_connector", return_value=_FakeLiveConnector()):
         with patch("ingestion.live_io._fixtures_dir_for_connector", return_value=Path("/nonexistent_connector_fixtures_xyz")):
             with pytest.MonkeyPatch.context() as m:
                 m.setenv("LIVE_IO_ALLOWED", "1")
