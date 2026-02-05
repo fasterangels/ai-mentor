@@ -1,10 +1,12 @@
-/** Analyzer API: run analysis (resolver + pipeline + analyzer). */
+/**
+ * Canonical analysis: POST /api/v1/pipeline/shadow/run only.
+ * /api/v1/analyze is not supported (501). Use runShadowPipeline + pipelineReportToAnalyzeResponse.
+ */
 
-import { apiPost } from "./client";
-import type { RunAnalysisRequest, RunAnalysisResponse } from "@/types/api";
-
-export async function runAnalysis(
-  body: RunAnalysisRequest
-): Promise<RunAnalysisResponse> {
-  return apiPost<RunAnalysisResponse>("/api/v1/analyze", body);
-}
+export {
+  runShadowPipeline,
+  pipelineReportToAnalyzeResponse,
+  type ShadowPipelineRequest,
+  type ShadowPipelineReport,
+  type AnalyzeResponseFromPipeline,
+} from "./pipeline";

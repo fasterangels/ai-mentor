@@ -7,11 +7,14 @@ Packaging entrypoint: no-console backend with file logging and port selection.
 - Starts uvicorn with FastAPI app on 127.0.0.1 only (offline/local).
 
 Run as script from backend dir: python backend_entry.py
+  python backend_entry.py --ops burn-in-run   -> run burn-in ops only, write reports/index.json, exit (no uvicorn)
 Or as frozen exe (PyInstaller --noconsole).
 """
 
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
 import logging
 import os
@@ -86,8 +89,51 @@ def _set_packaged_env() -> None:
     os.environ["AI_MENTOR_PACKAGED"] = "1"
 
 
+def _run_ops_burn_in_run() -> int:
+    """Run burn-in ops only; write reports/index.json under REPORTS_DIR (default reports); exit. No uvicorn."""
+    reports_dir = os.environ.get("REPORTS_DIR", "reports")
+    index_path = Path(reports_dir) / "index.json"
+
+    async def _run() -> int:
+        import models  # noqa: F401
+        from core.config import get_settings
+        from core.database import init_database, dispose_database, get_database_manager
+        from runner.burn_in_ops_runner import run_burn_in_ops
+
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_burn_in_ops(
+                    session,
+                    connector_name="stub_live_platform",
+                    match_ids=None,
+                    enable_activation=False,
+                    dry_run=True,
+                    reports_dir=reports_dir,
+                    index_path=str(index_path),
+                    max_bundles_retained=30,
+                )
+        finally:
+            await dispose_database()
+
+        if result.get("error"):
+            print(result.get("detail", result.get("error")), file=sys.stderr)
+            return 1
+        return 0
+
+    return asyncio.run(_run())
+
+
 def main() -> int:
-    # When packaged, use LOCALAPPDATA paths for DB and logs
+    parser = argparse.ArgumentParser(description="Backend entry: server or ops subcommand")
+    parser.add_argument("--ops", choices=["burn-in-run"], help="Run ops and exit (no server)")
+    args, _ = parser.parse_known_args()
+
+    if getattr(args, "ops", None) == "burn-in-run":
+        return _run_ops_burn_in_run()
+
+    # Default: start uvicorn server
     if getattr(sys, "frozen", False):
         _set_packaged_env()
     _setup_file_logging()
@@ -95,7 +141,6 @@ def main() -> int:
     _write_port_file(port)
     logger = logging.getLogger(__name__)
     logger.info("Backend entry: port=%s, base_dir=%s", port, BASE_DIR)
-    # Import app after env and logging are set
     from main import app
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

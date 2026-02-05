@@ -84,3 +84,34 @@ export interface HistoryRow {
 export interface EvaluationHistoryResponse {
   items: HistoryRow[];
 }
+
+/** Request for POST /api/v1/pipeline/shadow/run (canonical analysis flow). */
+export interface ShadowPipelineRequest {
+  connector_name?: string;
+  match_id: string;
+  final_home_goals?: number;
+  final_away_goals?: number;
+  status?: string;
+}
+
+/** Pipeline report shape (decisions, evaluation, audit). */
+export interface ShadowPipelineReport {
+  ingestion?: { payload_checksum?: string | null; collected_at?: string | null };
+  analysis?: {
+    snapshot_id?: number | null;
+    markets_picks_confidences?: Record<string, unknown>;
+    decisions?: MarketDecision[];
+  };
+  resolution?: { market_outcomes?: Record<string, unknown> };
+  evaluation_report_checksum?: string | null;
+  proposal?: { diffs?: unknown[]; guardrails_results?: unknown[]; proposal_checksum?: string | null };
+  audit?: {
+    changed_count?: number;
+    per_market_change_count?: Record<string, number>;
+    snapshots_checksum?: string | null;
+    current_policy_checksum?: string | null;
+    proposed_policy_checksum?: string | null;
+  };
+  error?: string;
+  detail?: string;
+}

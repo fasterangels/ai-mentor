@@ -1,33 +1,37 @@
-"""
-Connector registry: resolve connector by name.
-
-No side effects; no DB writes or network calls at registration.
-"""
+"""Registry of platform adapters by name."""
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
-from .connectors.base import DataConnector
-from .connectors.dummy import DummyConnector
+from ingestion.connectors.platform_base import DataConnector
+from ingestion.connectors.real_provider_2 import RealProvider2Adapter
+from ingestion.connectors.sample_platform import SamplePlatformAdapter
+from ingestion.connectors.sample_recorded_platform_v2 import SampleRecordedPlatformV2Adapter
+from ingestion.connectors.stub_platform import StubPlatformAdapter
+from ingestion.connectors.stub_live_platform import StubLivePlatformAdapter
+from ingestion.connectors.real_provider import RealProviderAdapter
 
 _REGISTRY: Dict[str, DataConnector] = {
-    "dummy": DummyConnector(),
+    "sample_platform": SamplePlatformAdapter(),
+    "sample_recorded_platform_v2": SampleRecordedPlatformV2Adapter(),
+    "stub_platform": StubPlatformAdapter(),
+    "stub_live_platform": StubLivePlatformAdapter(),
+    "real_provider": RealProviderAdapter(),
+    "real_provider_2": RealProvider2Adapter(),
 }
 
 
-def get_connector(name: str) -> DataConnector:
-    """Return the connector registered under the given name. Raises KeyError if unknown."""
-    if name not in _REGISTRY:
-        raise KeyError(f"Unknown connector: {name}")
-    return _REGISTRY[name]
+def get_connector(name: str) -> Optional[DataConnector]:
+    """Return the adapter registered under name, or None."""
+    return _REGISTRY.get(name)
 
 
-def register_connector(name: str, connector: DataConnector) -> None:
-    """Register a connector by name (for tests or future extensions)."""
-    _REGISTRY[name] = connector
+def list_registered_connectors() -> list[str]:
+    """Return sorted list of registered connector names (for CI and tooling)."""
+    return sorted(_REGISTRY.keys())
 
 
-def list_connector_names() -> list[str]:
-    """Return list of registered connector names."""
-    return list(_REGISTRY.keys())
+def register_connector(name: str, adapter: DataConnector) -> None:
+    """Register an adapter under name (for tests or extensions)."""
+    _REGISTRY[name] = adapter

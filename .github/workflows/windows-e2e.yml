@@ -26,7 +26,7 @@ jobs:
         run: |
           python -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
 
-      - name: Start backend and run canary (GET /health, OPTIONS /api/v1/analyze with Origin)
+      - name: Start backend and run canary (GET /health, OPTIONS /api/v1/analyze; POST returns 501)
         run: python packaging/canary_preflight.py
 
   windows-e2e:
@@ -85,7 +85,7 @@ jobs:
           type packaging\artifacts\ci_build_stdout.txt
           exit /b %ERRORLEVEL%
 
-      - name: Post-BLOCK smoke verification (backend + health + OPTIONS + POST /analyze)
+      - name: Post-BLOCK smoke verification (backend + health + OPTIONS + POST /analyze expect 501)
         run: |
           python packaging/smoke_verify.py
           if errorlevel 1 exit /b 1

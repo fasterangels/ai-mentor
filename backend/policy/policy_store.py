@@ -1,4 +1,4 @@
-"""Load/save policy from disk; default policy with sane defaults."""
+"""Load/save policy; default policy; checksums."""
 
 from __future__ import annotations
 
@@ -18,19 +18,16 @@ def _json_default(o: Any) -> Any:
 
 
 def stable_json_dumps(obj: Any) -> str:
-    """Stable JSON for deterministic checksums and serialization."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=_json_default)
 
 
 def checksum_report(data: dict[str, Any] | str) -> str:
-    """SHA-256 hex of string or stable JSON of dict."""
     if isinstance(data, dict):
         data = stable_json_dumps(data)
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def default_policy() -> Policy:
-    """Sane defaults matching current analyzer behavior (min_confidence 0.62)."""
     return Policy(
         meta=PolicyVersion(
             version="v0",
@@ -51,20 +48,16 @@ def _default_policies_dir() -> Path:
 
 
 def default_policy_path() -> Path:
-    """Default path for policy file (e.g. backend/policies/policy_v0.json)."""
     return _default_policies_dir() / "policy_v0.json"
 
 
 def load_policy(path: str | Path) -> Policy:
-    """Load policy from JSON file. Raises on invalid content."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
-    data = json.loads(text)
-    return Policy.model_validate(data)
+    return Policy.model_validate(json.loads(text))
 
 
 def save_policy(policy: Policy, path: str | Path) -> None:
-    """Write policy as stable JSON (sorted keys)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = policy.model_dump(mode="json")

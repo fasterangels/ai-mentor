@@ -1,0 +1,13 @@
+{
+  "match_id": "stub_live_001",
+  "home_team": "Alpha FC",
+  "away_team": "Beta United",
+  "competition": "Stub Live League",
+  "kickoff_utc": "2025-10-01T18:00:00+00:00",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 2.20,
+    "draw": 3.30,
+    "away": 3.10
+  }
+}

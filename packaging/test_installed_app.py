@@ -1,8 +1,8 @@
 """
-Automated installed-build test: install NSIS -> launch app -> wait /health 200 -> POST /api/v1/analyze -> PASS.
+Automated installed-build test: install NSIS -> launch app -> wait /health 200 -> POST /api/v1/analyze (expect 501) -> PASS.
 
 Finds latest NSIS installer in src-tauri/target/release/bundle/nsis, runs silent install to a temp
-dir, launches the installed desktop app, waits up to 10s for GET /health 200, then POST /api/v1/analyze
+dir, launches the installed desktop app, waits up to 10s for GET /health 200, then POST /api/v1/analyze (expect 501)
 with minimal payload. Prints last 80 lines of app.log and backend.log.
 Exit code 0 only if both /health and analyze succeed.
 
@@ -226,7 +226,7 @@ def main() -> int:
 
         try:
             status, body = _post(ANALYZE_URL, b"{}", timeout=15)
-            if status != 200:
+            if status != 501:
                 print(f"POST /api/v1/analyze -> {status} body={body[:500]!r}")
                 proc.terminate()
                 proc.wait(timeout=5)
@@ -237,8 +237,12 @@ def main() -> int:
                 for line in _tail(backend_log_path, LOG_TAIL_LINES):
                     print(line)
                 return 1
-            print("POST /api/v1/analyze -> 200")
-            json.loads(body.decode("utf-8", errors="replace"))
+            print("POST /api/v1/analyze -> 501 (ANALYZE_ENDPOINT_NOT_SUPPORTED)")
+            data = json.loads(body.decode("utf-8", errors="replace"))
+            err = (data or {}).get("error") or {}
+            if err.get("code") != "ANALYZE_ENDPOINT_NOT_SUPPORTED":
+                print("FAIL: 501 response missing error.code ANALYZE_ENDPOINT_NOT_SUPPORTED")
+                return 1
         except Exception as e:
             print(f"POST /api/v1/analyze error: {e}")
             proc.terminate()

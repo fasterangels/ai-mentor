@@ -15,6 +15,8 @@ export interface MatchSelectorPanelProps {
   onAwayTeamChange: (value: string) => void;
   dateTime: string;
   onDateTimeChange: (value: string) => void;
+  matchId?: string;
+  onMatchIdChange?: (value: string) => void;
   disabled?: boolean;
 }
 
@@ -29,6 +31,8 @@ export default function MatchSelectorPanel({
   onAwayTeamChange,
   dateTime,
   onDateTimeChange,
+  matchId = "sample_platform_match_001",
+  onMatchIdChange,
   disabled,
 }: MatchSelectorPanelProps) {
   const isLive = mode === "LIVE";
@@ -39,6 +43,7 @@ export default function MatchSelectorPanel({
         <div>
           <h2 className="ai-matchPanel__title">{t("analysis.title")}</h2>
           <p className="ai-matchPanel__subtitle">{t("home.welcome_title")}</p>
+          <p className="ai-matchPanel__hint ai-muted" style={{ fontSize: 12, marginTop: 4 }}>{t("analysis.shadow_pipeline_hint")}</p>
         </div>
         <SegmentedControl
           value={mode}
@@ -114,6 +119,23 @@ export default function MatchSelectorPanel({
             </span>
           )}
         </div>
+
+        {onMatchIdChange && (
+          <div className="ai-matchPanel__row">
+            <label htmlFor="ai-mentor-match-id" className="ai-label">
+              {t("predictions.match_id_label")}
+            </label>
+            <input
+              id="ai-mentor-match-id"
+              className="ai-input"
+              value={matchId}
+              onChange={(e) => onMatchIdChange(e.target.value)}
+              placeholder="sample_platform_match_001"
+              disabled={disabled}
+              aria-label={t("predictions.match_id_label")}
+            />
+          </div>
+        )}
       </div>
     </section>
   );

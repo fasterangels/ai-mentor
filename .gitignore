@@ -6,6 +6,9 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
+backend/.venv/
+**/.venv/
 ENV/
 build/
 develop-eggs/
@@ -69,6 +72,9 @@ logs/
 packaging/artifacts/e2e_stdout.txt
 packaging/artifacts/backend.log
 
-# Policy/replay generated reports (do not commit)
-audit_report.json
-replay_report.json
+# Operational reports (reports/ directory tracked via reports/.gitkeep)
+reports/shadow_batch_*.json
+reports/index.json
+reports/burn_in/
+backend/reports/index.json
+backend/reports/burn_in/

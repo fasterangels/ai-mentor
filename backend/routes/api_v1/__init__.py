@@ -1,18 +1,20 @@
-"""API v1: analyze and evaluation endpoints."""
+"""API v1: analyze, evaluation, pipeline, runner, reports, and meta endpoints."""
 
 from fastapi import APIRouter
 
 from .analyze import router as analyze_router
 from .evaluation import router as evaluation_router
-from .ingestion import router as ingestion_router
-from .policy import router as policy_router
-from .results import router as results_router
+from .meta import router as meta_router
+from .pipeline import router as pipeline_router
+from .reports import router as reports_router
+from .runner import router as runner_router
 
 router = APIRouter(prefix="/api/v1", tags=["api_v1"])
 router.include_router(analyze_router)
 router.include_router(evaluation_router)
-router.include_router(ingestion_router)
-router.include_router(policy_router)
-router.include_router(results_router)
+router.include_router(meta_router)
+router.include_router(pipeline_router)
+router.include_router(reports_router)
+router.include_router(runner_router)
 
 api_v1_router = router

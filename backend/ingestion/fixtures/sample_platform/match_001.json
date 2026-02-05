@@ -1,0 +1,14 @@
+{
+  "match_id": "sample_platform_match_001",
+  "home_team": "North FC",
+  "away_team": "South United",
+  "competition": "Sample League",
+  "kickoff_utc": "2025-09-15T19:00:00+00:00",
+  "venue": "Sample Arena",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 2.10,
+    "draw": 3.40,
+    "away": 3.20
+  }
+}

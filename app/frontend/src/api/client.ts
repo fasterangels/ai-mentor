@@ -24,8 +24,15 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+/** Forbidden path: UI must not call deprecated analyze endpoint. */
+const FORBIDDEN_ANALYZE_PATH = "/api/v1/analyze";
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${getBase()}${path}`, {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (normalized.includes(FORBIDDEN_ANALYZE_PATH)) {
+    throw new Error("Not supported: /api/v1/analyze. Use /pipeline/shadow/run.");
+  }
+  const res = await fetch(`${getBase()}${normalized}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

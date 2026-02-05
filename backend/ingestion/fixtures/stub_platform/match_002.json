@@ -1,0 +1,14 @@
+{
+  "match_id": "stub_platform_match_002",
+  "home_team": "East City",
+  "away_team": "West Town",
+  "competition": "Stub League",
+  "kickoff_utc": "2025-09-16T20:00:00Z",
+  "venue": "City Stadium",
+  "status": "scheduled",
+  "odds_1x2": {
+    "home": 1.85,
+    "draw": 3.60,
+    "away": 4.00
+  }
+}

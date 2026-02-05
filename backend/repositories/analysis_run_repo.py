@@ -41,7 +41,7 @@ class AnalysisRunRepository(BaseRepository[AnalysisRun]):
         to_utc: Optional[datetime] = None,
         limit: int = 5000,
     ) -> List[AnalysisRun]:
-        """List analysis runs with created_at_utc in [from_utc, to_utc] (inclusive)."""
+        """List analysis runs with created_at_utc in range."""
         stmt = select(AnalysisRun).order_by(desc(AnalysisRun.created_at_utc)).limit(limit)
         if from_utc is not None:
             stmt = stmt.where(AnalysisRun.created_at_utc >= from_utc)
