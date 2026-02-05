@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from ingestion.connectors.platform_base import IngestedMatchData, MatchIdentity
 from ingestion.connectors.stub_platform import StubPlatformAdapter
-from ingestion.live_io import get_connector_safe
+from ingestion.live_io import execution_mode_context, get_connector_safe
 from ingestion.stub_server import create_stub_app
 
 
@@ -154,10 +154,11 @@ def test_stub_connector_requires_live_io_allowed():
 
 
 def test_stub_connector_allowed_when_live_io_enabled():
-    """Stub connector is allowed when LIVE_IO_ALLOWED is true."""
+    """Stub connector is allowed when LIVE_IO_ALLOWED is true and shadow mode with baseline."""
     with pytest.MonkeyPatch.context() as m:
         m.setenv("LIVE_IO_ALLOWED", "1")
-        adapter = get_connector_safe("stub_platform")
+        with execution_mode_context("shadow"):
+            adapter = get_connector_safe("stub_platform")
         assert adapter is not None
         assert isinstance(adapter, StubPlatformAdapter)
 

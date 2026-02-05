@@ -68,12 +68,13 @@ async def run_shadow_pipeline(
 
     if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
         # Recorded fixtures (sample_platform) or live stubs (stub_platform/stub_live_platform) via get_connector_safe
-        # Live connectors require LIVE_IO_ALLOWED=true (enforced via live_io wrapper)
+        # Live connectors require LIVE_IO_ALLOWED=true and execution_mode=shadow with recorded baseline
         import time
-        from ingestion.live_io import get_connector_safe, record_request
+        from ingestion.live_io import execution_mode_context, get_connector_safe, record_request
         from ingestion.evidence_builder import ingested_to_evidence_pack
 
-        adapter = get_connector_safe(connector_name)
+        with execution_mode_context("shadow"):
+            adapter = get_connector_safe(connector_name)
         if not adapter:
             return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
         # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)

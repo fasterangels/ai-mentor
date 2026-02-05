@@ -74,12 +74,14 @@ def run_live_shadow_compare(
         connector_used = live_adapter.name
     elif connector_name and _connector_supports_live_and_recorded(connector_name):
         # Use connector with env toggling (e.g. real_provider): live first, then recorded
-        from ingestion.live_io import get_connector_safe
-        live_adapter = get_connector_safe(connector_name)
+        from ingestion.live_io import execution_mode_context, get_connector_safe
+        with execution_mode_context("shadow"):
+            live_adapter = get_connector_safe(connector_name)
         if not live_adapter:
             return {"error": "CONNECTOR_NOT_AVAILABLE", "detail": "Live connector not available (set REAL_PROVIDER_LIVE and LIVE_IO_ALLOWED for real_provider)."}
         with _recorded_env(connector_name):
-            rec_adapter = get_connector_safe(connector_name)
+            with execution_mode_context("shadow"):
+                rec_adapter = get_connector_safe(connector_name)
         if not rec_adapter:
             return {"error": "CONNECTOR_NOT_AVAILABLE", "detail": "Recorded connector not available (recorded path requires connector in recorded mode)."}
         match_ids_used = sorted(m.match_id for m in live_adapter.fetch_matches())
