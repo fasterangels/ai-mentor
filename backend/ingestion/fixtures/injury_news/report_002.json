@@ -1,0 +1,24 @@
+{
+  "source_ref": "https://example.com/news/2",
+  "published_at": "2025-06-02T14:30:00+00:00",
+  "title": "Team B squad update",
+  "body": "Player Y returns from suspension. Player Z doubtful for next match.",
+  "claims": [
+    {
+      "team_ref": "team_b",
+      "player_ref": "player_y",
+      "claim_type": "RETURN",
+      "status": "FIT",
+      "validity": "NEXT_MATCH",
+      "confidence": 0.85
+    },
+    {
+      "team_ref": "team_b",
+      "player_ref": "player_z",
+      "claim_type": "INJURY_STATUS",
+      "status": "DOUBTFUL",
+      "validity": "NEXT_MATCH",
+      "confidence": 0.7
+    }
+  ]
+}
