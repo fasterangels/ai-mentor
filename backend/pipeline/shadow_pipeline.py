@@ -7,6 +7,7 @@ Returns PipelineReport; does not apply policy.
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,11 @@ from analyzer.v2.engine import analyze_v2
 from analyzer.v2.contracts import ANALYZER_VERSION_V2
 
 MARKETS_V2 = ["1X2", "OU_2.5", "BTTS"]
+
+
+def _inj_news_enabled() -> bool:
+    """True if INJ_NEWS_ENABLED is 1/true/yes (default False)."""
+    return os.environ.get("INJ_NEWS_ENABLED", "").strip().lower() in ("1", "true", "yes")
 
 
 def _evidence_pack_to_dict(ep: EvidencePack) -> Dict[str, Any]:
@@ -71,6 +77,10 @@ async def run_shadow_pipeline(
     now = now_utc or datetime.now(timezone.utc)
     home = int(final_score.get("home", 0))
     away = int(final_score.get("away", 0))
+
+    if _inj_news_enabled():
+        from ingestion.injury_news_adapter import run_recorded_injury_news_ingestion
+        await run_recorded_injury_news_ingestion(session, now_utc=now)
 
     t_start = log_pipeline_start(connector_name, match_id)
     evidence_pack: Optional[EvidencePack] = None
