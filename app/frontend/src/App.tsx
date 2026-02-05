@@ -732,7 +732,7 @@ function App() {
     if (!result) return;
     const text = buildTextSummary({
       timestamp: new Date().toISOString(),
-      endpoint: `${apiBase}/api/v1/analyze`,
+      endpoint: `${apiBase}/api/v1/pipeline/shadow/run`,
       homeTeam: home,
       awayTeam: away,
       result,
@@ -984,7 +984,7 @@ function App() {
     scopeDecisions.forEach((d) => { scopeKindCounts[getDecisionKind(d.decision)] += 1; });
     const html = buildReportHtml({
       timestamp: new Date().toISOString(),
-      endpoint: `${apiBase}/api/v1/analyze`,
+      endpoint: `${apiBase}/api/v1/pipeline/shadow/run`,
       homeTeam: home,
       awayTeam: away,
       result,

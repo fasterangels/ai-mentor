@@ -3,7 +3,7 @@ Unicode-safe one-click Windows desktop build: backend exe + frontend + Tauri + E
 
 Backend runs as per-user Scheduled Task (AI_Mentor_Backend). Build produces backend exe, copies it plus
 launch_backend.cmd and task XML to Tauri bin, builds NSIS; FINAL step runs test_installed_task_end_to_end.py
-(silent install -> task registered + run -> /health -> POST /api/v1/analyze). If E2E test fails, BUILD FAILS.
+(silent install -> task registered + run -> /health -> POST /api/v1/analyze expect 501). If E2E test fails, BUILD FAILS.
 
 Run from repo root:
   python -m tooling.launchers.build_desktop_windows
@@ -284,7 +284,7 @@ def main() -> int:
         print("  ", e)
         print()
 
-    # 5) [FINAL] E2E test: silent install -> task registered + run -> /health -> POST /api/v1/analyze
+    # 5) [FINAL] E2E test: silent install -> task registered + run -> /health -> POST /api/v1/analyze (expect 501)
     bundle = root / "app" / "frontend" / "src-tauri" / "target" / "release" / "bundle"
     nsis_dir = bundle / "nsis"
     if sys.platform == "win32" and nsis_dir.is_dir() and list(nsis_dir.glob("*.exe")):

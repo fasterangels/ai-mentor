@@ -18,7 +18,7 @@ Use this checklist before tagging and releasing v1.x. All items must be green fo
   pytest -q backend/tests/unit backend/tests/integration backend/tests/contract --maxfail=1
   ```
 - [ ] **Contract lock** (analyze response critical keys): `pytest backend/tests/test_analyze_contract.py` (or contract tests in `backend/tests/contract`).
-- [ ] **Windows E2E** (if applicable): canary preflight (GET /health, OPTIONS /api/v1/analyze) and full E2E job pass.
+- [ ] **Windows E2E** (if applicable): canary preflight (GET /health, OPTIONS /api/v1/analyze). POST /api/v1/analyze returns 501 by design; use /pipeline/shadow/run. Full E2E job pass.
 - [ ] **VERSION CI step** passes (workflow enforces VERSION present and semver pattern).
 - [ ] **Reports gitignore** CI step passes (reports artifacts remain ignored).
 

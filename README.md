@@ -18,7 +18,7 @@ An intelligent AI assistant with memory and knowledge management capabilities, p
 
 **No new features.** This release contains CI/infra guardrails only:
 
-- **Canary preflight:** Fail-fast job at start of Windows E2E (backend exe + GET /health + OPTIONS /api/v1/analyze with Origin).
+- **Canary preflight:** Fail-fast job at start of Windows E2E (backend exe + GET /health + OPTIONS /api/v1/analyze with Origin). POST /api/v1/analyze is intentionally not supported (501). Use /pipeline/shadow/run.
 - **Contract lock:** Pytest asserting analyze response critical keys (`resolver.status`, `analyzer.outcome` or `analyzer.decisions`, `match_id`).
 - **Artifact invariants:** CI step asserting `ci_build_stdout.txt`, `backend.log`, and NSIS installer exist on success.
 - **Rollback doc:** README section for deleting a release, moving/re-pushing a tag, re-running the release workflow.
