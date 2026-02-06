@@ -22,12 +22,14 @@ from policy.policy_store import checksum_report
 from policy.tuner import run_tuner, PolicyProposal
 from policy.audit import audit_snapshots
 from services.result_attach_service import attach_result
+from core.safety_snapshot import safety_summary_for_report
 from ops.ops_events import (
     log_pipeline_start,
     log_pipeline_end,
     log_ingestion_source,
     log_evaluation_summary,
     log_guardrail_trigger,
+    log_safety_summary_emitted,
 )
 
 # Analyzer v2
@@ -345,9 +347,11 @@ async def run_shadow_pipeline(
             "reason": activation_audits[0].get("activation_reason") if activation_audits and not activation_allowed_for_match else None,
             "audits": activation_audits,
         },
+        "safety_summary": safety_summary_for_report(),
     }
     if dry_run:
         report["dry_run"] = True
+    log_safety_summary_emitted(report["safety_summary"]["flags"])
     log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start)
     return report
 

@@ -29,6 +29,7 @@ async def shadow_run(
     connector_name = (body.get("connector_name") or "dummy").strip()
     match_id = (body.get("match_id") or "").strip()
     if not match_id:
+        from core.safety_snapshot import safety_summary_for_report
         return {
             "error": "MISSING_MATCH_ID",
             "detail": "match_id is required",
@@ -38,6 +39,7 @@ async def shadow_run(
             "evaluation_report_checksum": None,
             "proposal": {},
             "audit": {},
+            "safety_summary": safety_summary_for_report(),
         }
     final_home_goals = int(body.get("final_home_goals", 0))
     final_away_goals = int(body.get("final_away_goals", 0))
