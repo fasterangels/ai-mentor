@@ -19,6 +19,7 @@ from ingestion.live_io import (
     snapshot_writes_allowed,
 )
 from pipeline.live_snapshot.live_source_client import LiveSourceClient
+from pipeline.snapshot_envelope import build_envelope_for_live_shadow
 from repositories.raw_payload_repo import RawPayloadRepository
 
 from ops.ops_events import (
@@ -27,6 +28,8 @@ from ops.ops_events import (
     log_live_shadow_fetch_ok,
     log_live_shadow_ingestion_end,
     log_live_shadow_ingestion_start,
+    log_snapshot_write_end,
+    log_snapshot_write_start,
 )
 
 LIVE_SHADOW_SOURCE_NAME = "live_shadow"
@@ -122,24 +125,24 @@ async def run_live_shadow_read(
             deduped += 1
             continue
 
-        envelope: Dict[str, Any] = {
-            "metadata": {
-                "snapshot_type": "live_shadow",
-                "source": {
-                    "class": "LIVE_SHADOW",
-                    "name": source_name,
-                    "ref": None,
-                    "reliability_tier": "MED",
-                },
-                "observed_at": now.isoformat(),
-                "checksum": checksum,
-                "latency_ms": round(latency_ms, 2),
-                "fetch_started_at": fetch_started.isoformat(),
-                "fetch_ended_at": fetch_ended.isoformat(),
-            },
-            "payload": payload,
-        }
-        payload_json = json.dumps(envelope, sort_keys=True, separators=(",", ":"), default=str)
+        envelope = build_envelope_for_live_shadow(
+            payload=payload,
+            snapshot_id=checksum,
+            created_at_utc=now,
+            source_name=source_name,
+            observed_at_utc=now,
+            fetch_started_at_utc=fetch_started,
+            fetch_ended_at_utc=fetch_ended,
+            latency_ms=round(latency_ms, 2),
+        )
+        envelope_dict = envelope.to_dict()
+        payload_json = json.dumps(
+            {"metadata": envelope_dict, "payload": payload},
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        t_write = log_snapshot_write_start("live_shadow", checksum)
         await repo.add_payload(
             source_name=LIVE_SHADOW_SOURCE_NAME,
             domain=LIVE_SHADOW_DOMAIN,
@@ -147,6 +150,7 @@ async def run_live_shadow_read(
             payload_json=payload_json,
             related_match_id=None,
         )
+        log_snapshot_write_end("live_shadow", checksum, time.perf_counter() - t_write)
         snapshots_written += 1
 
     duration = time.perf_counter() - t_start

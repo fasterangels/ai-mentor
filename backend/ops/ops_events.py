@@ -140,3 +140,36 @@ def log_live_shadow_fetch_ok(fixture_id: str, latency_ms: float) -> None:
 def log_live_shadow_fetch_failed(fixture_id: str, reason: str) -> None:
     """Emitted when a live fetch for one fixture failed."""
     _event("live_shadow_fetch_failed", fixture_id=fixture_id, reason=reason)
+
+
+def log_snapshot_write_start(snapshot_type: str, snapshot_id: str) -> float:
+    """Log snapshot write start; return start time for duration."""
+    _event("snapshot_write_start", snapshot_type=snapshot_type, snapshot_id=snapshot_id)
+    return time.perf_counter()
+
+
+def log_snapshot_write_end(
+    snapshot_type: str,
+    snapshot_id: str,
+    duration_seconds: float,
+) -> None:
+    """Log snapshot write end with duration."""
+    _event(
+        "snapshot_write_end",
+        snapshot_type=snapshot_type,
+        snapshot_id=snapshot_id,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_snapshot_envelope_missing_fields(missing_keys: list) -> None:
+    """Emitted when reading legacy snapshots and defaulting missing envelope fields."""
+    _event("snapshot_envelope_missing_fields", missing_keys=missing_keys)
+
+
+def log_snapshot_integrity_check_failed(
+    snapshot_id: str,
+    detail: str,
+) -> None:
+    """Emitted when envelope checksum mismatch detected. Does not fail pipeline by default."""
+    _event("snapshot_integrity_check_failed", snapshot_id=snapshot_id, detail=detail)

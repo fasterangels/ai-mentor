@@ -75,6 +75,8 @@ async def test_live_shadow_mode_writes_snapshots_no_analysis(test_db, monkeypatc
     meta = envelope["metadata"]
     assert meta.get("snapshot_type") == "live_shadow"
     assert meta.get("source", {}).get("class") == "LIVE_SHADOW"
-    assert "observed_at" in meta
-    assert "checksum" in meta
+    assert "observed_at_utc" in meta
+    assert "payload_checksum" in meta
     assert "latency_ms" in meta
+    assert meta.get("schema_version") == 1
+    assert "envelope_checksum" in meta
