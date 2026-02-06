@@ -77,3 +77,99 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_evidence_ingestion_start(fixture_id: str, item_count: int) -> float:
+    """Log evidence ingestion start; return start time."""
+    _event("evidence_ingestion_start", fixture_id=fixture_id, item_count=item_count)
+    return time.perf_counter()
+
+
+def log_evidence_ingestion_end(
+    fixture_id: str,
+    duration_seconds: float,
+    items_written: int,
+    deduped: int,
+    conflict_detected: int,
+) -> None:
+    """Log evidence ingestion end with counts."""
+    _event(
+        "evidence_ingestion_end",
+        fixture_id=fixture_id,
+        duration_seconds=round(duration_seconds, 4),
+        evidence_items_written=items_written,
+        evidence_deduped=deduped,
+        evidence_conflict_detected=conflict_detected,
+    )
+
+
+def log_live_shadow_blocked_by_flag(detail: str) -> None:
+    """Emitted when live-shadow is requested but LIVE_IO_ALLOWED or SNAPSHOT_WRITES_ALLOWED is false."""
+    _event("live_shadow_blocked_by_flag", detail=detail)
+
+
+def log_live_shadow_ingestion_start(fixture_count: int) -> float:
+    """Log live shadow ingestion start; return start time."""
+    _event("live_shadow_ingestion_start", fixture_count=fixture_count)
+    return time.perf_counter()
+
+
+def log_live_shadow_ingestion_end(
+    duration_seconds: float,
+    snapshots_written: int,
+    deduped: int,
+    fetch_ok: int,
+    fetch_failed: int,
+) -> None:
+    """Log live shadow ingestion end with counts."""
+    _event(
+        "live_shadow_ingestion_end",
+        duration_seconds=round(duration_seconds, 4),
+        live_shadow_snapshots_written=snapshots_written,
+        live_shadow_deduped=deduped,
+        fetch_ok=fetch_ok,
+        fetch_failed=fetch_failed,
+    )
+
+
+def log_live_shadow_fetch_ok(fixture_id: str, latency_ms: float) -> None:
+    """Emitted when a live fetch for one fixture succeeded."""
+    _event("live_shadow_fetch_ok", fixture_id=fixture_id, latency_ms=round(latency_ms, 2))
+
+
+def log_live_shadow_fetch_failed(fixture_id: str, reason: str) -> None:
+    """Emitted when a live fetch for one fixture failed."""
+    _event("live_shadow_fetch_failed", fixture_id=fixture_id, reason=reason)
+
+
+def log_snapshot_write_start(snapshot_type: str, snapshot_id: str) -> float:
+    """Log snapshot write start; return start time for duration."""
+    _event("snapshot_write_start", snapshot_type=snapshot_type, snapshot_id=snapshot_id)
+    return time.perf_counter()
+
+
+def log_snapshot_write_end(
+    snapshot_type: str,
+    snapshot_id: str,
+    duration_seconds: float,
+) -> None:
+    """Log snapshot write end with duration."""
+    _event(
+        "snapshot_write_end",
+        snapshot_type=snapshot_type,
+        snapshot_id=snapshot_id,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_snapshot_envelope_missing_fields(missing_keys: list) -> None:
+    """Emitted when reading legacy snapshots and defaulting missing envelope fields."""
+    _event("snapshot_envelope_missing_fields", missing_keys=missing_keys)
+
+
+def log_snapshot_integrity_check_failed(
+    snapshot_id: str,
+    detail: str,
+) -> None:
+    """Emitted when envelope checksum mismatch detected. Does not fail pipeline by default."""
+    _event("snapshot_integrity_check_failed", snapshot_id=snapshot_id, detail=detail)
