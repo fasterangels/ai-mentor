@@ -1,12 +1,10 @@
 """
-Staleness metrics per reason (G4): measure how reason effectiveness varies by evidence age.
-Measurement-only; no decay, no policy changes. Deterministic.
-Evidence age is a provisional proxy: decision_time_utc - snapshot.observed_at_utc (snapshot-level).
+Staleness evaluation run (G4): load data, aggregate, write reports via reporting module.
+Measurement-only; no decay, no policy. Backward compatible with legacy snapshots (G2 default observed_at_utc).
 """
 
 from __future__ import annotations
 
-import csv
 import json
 import time
 from dataclasses import dataclass
@@ -25,12 +23,14 @@ from repositories.prediction_repo import PredictionRepository
 from repositories.raw_payload_repo import RawPayloadRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 
+from .reporting import write_csv, write_json
+
 MARKETS = ("one_x_two", "over_under_25", "gg_ng")
 KEY_MAP = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng"}
 
 
 def _observed_at_from_row(row: RawPayload) -> Optional[str]:
-    """Parse payload_json envelope; return observed_at_utc or effective_from_utc. Provisional proxy."""
+    """Parse payload_json envelope; return observed_at_utc or effective_from_utc. G2: legacy defaults to created_at_utc."""
     meta_dict, _ = parse_payload_json(row.payload_json, created_at_utc_fallback=row.fetched_at_utc)
     observed = meta_dict.get("observed_at_utc") or meta_dict.get("observed_at")
     if observed:
@@ -254,36 +254,19 @@ async def run_staleness_evaluation(
     run_id = f"staleness_eval_{computed_at.strftime('%Y%m%d_%H%M%S')}"
     csv_path = reports_path / f"staleness_metrics_by_reason_{run_id}.csv"
     json_path = reports_path / f"staleness_metrics_by_reason_{run_id}.json"
+    csv_latest = reports_path / "staleness_metrics_by_reason.csv"
+    json_latest = reports_path / "staleness_metrics_by_reason.json"
 
-    # Also write canonical names for "latest" (overwrite)
-    csv_latest = Path(reports_dir) / "staleness_eval" / "staleness_metrics_by_reason.csv"
-    json_latest = Path(reports_dir) / "staleness_eval" / "staleness_metrics_by_reason.json"
-
-    # CSV
-    fieldnames = ["market", "reason_code", "age_band", "total", "correct", "accuracy", "neutral_rate", "avg_confidence"]
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in rows:
-            d = r.to_dict()
-            w.writerow({k: d.get(k) for k in fieldnames})
-    with open(csv_latest, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in rows:
-            d = r.to_dict()
-            w.writerow({k: d.get(k) for k in fieldnames})
-
-    # JSON
-    report_data = {
+    report_data: Dict[str, Any] = {
         "run_id": run_id,
         "computed_at_utc": computed_at.isoformat(),
         "missing_timestamps_count": missing_count,
         "rows": [r.to_dict() for r in rows],
     }
-    json_str = json.dumps(report_data, sort_keys=True, indent=2, default=str)
-    json_path.write_text(json_str, encoding="utf-8")
-    json_latest.write_text(json_str, encoding="utf-8")
+    write_csv(report_data, csv_path)
+    write_csv(report_data, csv_latest)
+    write_json(report_data, json_path)
+    write_json(report_data, json_latest)
 
     log_staleness_eval_written(len(rows))
     index_path = index_path or Path(reports_dir) / "index.json"

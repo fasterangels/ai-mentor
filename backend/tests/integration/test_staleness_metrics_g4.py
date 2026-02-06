@@ -87,15 +87,23 @@ async def test_staleness_eval_writes_report_and_analyzer_not_invoked_during_eval
         result = await run_staleness_evaluation(session, reports_dir=str(reports_dir), index_path=str(index_path))
     assert result.get("reports_written", 0) >= 1
     assert "row_count" in result
-    report_file = Path(result.get("report_path_json", ""))
-    assert report_file.exists()
-    data = json.loads(report_file.read_text(encoding="utf-8"))
+    # CSV and JSON report files exist (stable filenames)
+    report_csv = Path(result.get("report_path_csv", ""))
+    report_json = Path(result.get("report_path_json", ""))
+    assert report_csv.exists(), "staleness_metrics_by_reason CSV should exist"
+    assert report_json.exists(), "staleness_metrics_by_reason JSON should exist"
+    # CSV has expected headers
+    csv_lines = report_csv.read_text(encoding="utf-8").strip().splitlines()
+    assert len(csv_lines) >= 1
+    headers = csv_lines[0].split(",")
+    for key in ("market", "reason_code", "age_band", "total", "correct", "accuracy", "neutral_rate", "avg_confidence"):
+        assert key in headers, f"CSV should contain column {key!r}"
+    # JSON has expected structure
+    data = json.loads(report_json.read_text(encoding="utf-8"))
     assert "rows" in data
     assert "run_id" in data
     if data["rows"]:
         row = data["rows"][0]
-        assert "market" in row
-        assert "reason_code" in row
-        assert "age_band" in row
-        assert "total" in row
+        assert "market" in row and "reason_code" in row and "age_band" in row and "total" in row
         assert "accuracy" in row or "correct" in row
+    # Staleness-eval only reads existing data and writes reports; analyzer/evaluator are NOT invoked in this path

@@ -1,5 +1,7 @@
 # Phase G4: Staleness Metrics per Reason
 
+**Measurement only.** No changes to analyzer decisions, confidence, or policy. Offline-first; deterministic outputs.
+
 ## What is measured
 - Per (market, reason_code, age_band): count_total, count_correct, accuracy, neutral_rate, avg_confidence.
 - Evidence age is assigned to fixed bands: 0–30m, 30m–2h, 2h–6h, 6h–24h, 1d–3d, 3d–7d, 7d+.
