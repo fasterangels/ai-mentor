@@ -91,15 +91,39 @@ async def _run_delta_eval() -> int:
         await dispose_database()
 
 
+async def _run_staleness_eval() -> int:
+    import models  # noqa: F401
+    from core.config import get_settings
+    from core.database import init_database, dispose_database, get_database_manager
+    from runner.staleness_eval_runner import run_staleness_eval_mode
+
+    settings = get_settings()
+    await init_database(settings.database_url)
+    try:
+        async with get_database_manager().session() as session:
+            result = await run_staleness_eval_mode(session, reports_dir="reports")
+        print(
+            "staleness-eval ok: row_count=%s missing_ts=%s run_id=%s"
+            % (
+                result.get("row_count", 0),
+                result.get("missing_timestamps_count", 0),
+                result.get("run_id", ""),
+            )
+        )
+        return 0
+    finally:
+        await dispose_database()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Live snapshot: harness, live-shadow (G1), or delta-eval (G3)"
+        description="Live snapshot: harness, live-shadow (G1), delta-eval (G3), or staleness-eval (G4)"
     )
     parser.add_argument(
         "--mode",
-        choices=["harness", "live-shadow", "delta-eval"],
+        choices=["harness", "live-shadow", "delta-eval", "staleness-eval"],
         default="harness",
-        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded deltas",
+        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded; staleness-eval: metrics by reason/age",
     )
     args = parser.parse_args()
 
@@ -107,6 +131,8 @@ def main() -> int:
         return asyncio.run(_run_live_shadow())
     if args.mode == "delta-eval":
         return asyncio.run(_run_delta_eval())
+    if args.mode == "staleness-eval":
+        return asyncio.run(_run_staleness_eval())
     return _run_harness()
 
 

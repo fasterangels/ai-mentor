@@ -63,3 +63,16 @@ class RawPayloadRepository(BaseRepository[RawPayload]):
         stmt = select(RawPayload).where(RawPayload.source_name == source_name).order_by(RawPayload.id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_rows_by_source_and_match_id(
+        self, source_name: str, match_id: str
+    ) -> List[RawPayload]:
+        """Return RawPayload rows for the given source and related_match_id (e.g. pipeline_cache, match_id)."""
+        stmt = (
+            select(RawPayload)
+            .where(RawPayload.source_name == source_name)
+            .where(RawPayload.related_match_id == match_id)
+            .order_by(RawPayload.id)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

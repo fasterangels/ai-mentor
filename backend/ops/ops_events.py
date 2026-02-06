@@ -205,3 +205,33 @@ def log_delta_eval_incomplete(fixture_id: str, missing_side: str) -> None:
 def log_delta_eval_written(count: int) -> None:
     """Emitted when delta reports are written."""
     _event("delta_eval_written", count=count)
+
+
+def log_staleness_eval_start() -> float:
+    """Log staleness evaluation start; return start time for duration."""
+    _event("staleness_eval_start")
+    return time.perf_counter()
+
+
+def log_staleness_eval_end(
+    row_count: int,
+    missing_timestamps_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log staleness evaluation end with counts and duration."""
+    _event(
+        "staleness_eval_end",
+        row_count=row_count,
+        missing_timestamps_count=missing_timestamps_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_staleness_eval_written(count: int) -> None:
+    """Emitted when staleness metrics reports are written."""
+    _event("staleness_eval_written", count=count)
+
+
+def log_staleness_eval_missing_timestamps(count: int) -> None:
+    """Emitted when legacy snapshots default (missing observed_at_utc)."""
+    _event("staleness_eval_missing_timestamps", count=count)
