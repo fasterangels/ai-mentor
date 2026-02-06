@@ -57,3 +57,9 @@ class RawPayloadRepository(BaseRepository[RawPayload]):
         result = await self.session.execute(stmt)
         row = result.scalars().first()
         return row
+
+    async def list_rows_by_source(self, source_name: str) -> List[RawPayload]:
+        """Return all RawPayload rows for the given source_name (e.g. pipeline_cache, live_shadow)."""
+        stmt = select(RawPayload).where(RawPayload.source_name == source_name).order_by(RawPayload.id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

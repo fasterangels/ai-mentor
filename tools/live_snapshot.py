@@ -66,20 +66,47 @@ async def _run_live_shadow() -> int:
         await dispose_database()
 
 
+async def _run_delta_eval() -> int:
+    import models  # noqa: F401
+    from core.config import get_settings
+    from core.database import init_database, dispose_database, get_database_manager
+    from runner.delta_eval_runner import run_delta_eval_mode
+
+    settings = get_settings()
+    await init_database(settings.database_url)
+    try:
+        async with get_database_manager().session() as session:
+            result = await run_delta_eval_mode(session, reports_dir="reports")
+        print(
+            "delta-eval ok: reports_written=%s complete=%s incomplete=%s run_id=%s"
+            % (
+                result.get("reports_written", 0),
+                result.get("complete_count", 0),
+                result.get("incomplete_count", 0),
+                result.get("run_id", ""),
+            )
+        )
+        return 0
+    finally:
+        await dispose_database()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Live snapshot: harness (default) or live-shadow mode (G1)"
+        description="Live snapshot: harness, live-shadow (G1), or delta-eval (G3)"
     )
     parser.add_argument(
         "--mode",
-        choices=["harness", "live-shadow"],
+        choices=["harness", "live-shadow", "delta-eval"],
         default="harness",
-        help="harness: gates only; live-shadow: fetch -> write snapshots (no analysis)",
+        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded deltas",
     )
     args = parser.parse_args()
 
     if args.mode == "live-shadow":
         return asyncio.run(_run_live_shadow())
+    if args.mode == "delta-eval":
+        return asyncio.run(_run_delta_eval())
     return _run_harness()
 
 

@@ -173,3 +173,35 @@ def log_snapshot_integrity_check_failed(
 ) -> None:
     """Emitted when envelope checksum mismatch detected. Does not fail pipeline by default."""
     _event("snapshot_integrity_check_failed", snapshot_id=snapshot_id, detail=detail)
+
+
+def log_delta_eval_start() -> float:
+    """Log delta evaluation start; return start time for duration."""
+    _event("delta_eval_start")
+    return time.perf_counter()
+
+
+def log_delta_eval_end(
+    reports_count: int,
+    complete_count: int,
+    incomplete_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log delta evaluation end with counts and duration."""
+    _event(
+        "delta_eval_end",
+        reports_count=reports_count,
+        complete_count=complete_count,
+        incomplete_count=incomplete_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_delta_eval_incomplete(fixture_id: str, missing_side: str) -> None:
+    """Emitted when one side (recorded or live_shadow) is missing for a fixture."""
+    _event("delta_eval_incomplete", fixture_id=fixture_id, missing_side=missing_side)
+
+
+def log_delta_eval_written(count: int) -> None:
+    """Emitted when delta reports are written."""
+    _event("delta_eval_written", count=count)
