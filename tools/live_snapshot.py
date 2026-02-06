@@ -91,6 +91,25 @@ async def _run_delta_eval() -> int:
         await dispose_database()
 
 
+def _run_decay_fit() -> int:
+    """Run decay-fit (H1): read G4 staleness JSON, fit params, write artifacts. No DB."""
+    from runner.decay_fit_runner import run_decay_fit_mode
+
+    result = run_decay_fit_mode(reports_dir="reports")
+    if result.get("error"):
+        print("decay-fit error:", result.get("error"), file=sys.stderr)
+        return 1
+    print(
+        "decay-fit ok: params_count=%s skipped_low_support=%s path=%s"
+        % (
+            result.get("params_count", 0),
+            result.get("skipped_low_support", 0),
+            result.get("params_path", ""),
+        )
+    )
+    return 0
+
+
 async def _run_staleness_eval() -> int:
     import models  # noqa: F401
     from core.config import get_settings
@@ -117,13 +136,13 @@ async def _run_staleness_eval() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Live snapshot: harness, live-shadow (G1), delta-eval (G3), or staleness-eval (G4)"
+        description="Live snapshot: harness, live-shadow (G1), delta-eval (G3), staleness-eval (G4), decay-fit (H1)"
     )
     parser.add_argument(
         "--mode",
-        choices=["harness", "live-shadow", "delta-eval", "staleness-eval"],
+        choices=["harness", "live-shadow", "delta-eval", "staleness-eval", "decay-fit"],
         default="harness",
-        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded; staleness-eval: metrics by reason/age",
+        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded; staleness-eval: metrics by reason/age; decay-fit: fit decay params from G4 metrics",
     )
     args = parser.parse_args()
 
@@ -133,6 +152,8 @@ def main() -> int:
         return asyncio.run(_run_delta_eval())
     if args.mode == "staleness-eval":
         return asyncio.run(_run_staleness_eval())
+    if args.mode == "decay-fit":
+        return _run_decay_fit()
     return _run_harness()
 
 

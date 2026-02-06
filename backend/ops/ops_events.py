@@ -235,3 +235,33 @@ def log_staleness_eval_written(count: int) -> None:
 def log_staleness_eval_missing_timestamps(count: int) -> None:
     """Emitted when legacy snapshots default (missing observed_at_utc)."""
     _event("staleness_eval_missing_timestamps", count=count)
+
+
+def log_decay_fit_start() -> float:
+    """Log decay fit start; return start time for duration."""
+    _event("decay_fit_start")
+    return time.perf_counter()
+
+
+def log_decay_fit_end(
+    params_count: int,
+    duration_seconds: float,
+    skipped_low_support: int = 0,
+) -> None:
+    """Log decay fit end with counts and duration."""
+    _event(
+        "decay_fit_end",
+        params_count=params_count,
+        duration_seconds=round(duration_seconds, 4),
+        skipped_low_support=skipped_low_support,
+    )
+
+
+def log_decay_fit_written(count: int) -> None:
+    """Emitted when decay param artifacts are written."""
+    _event("decay_fit_written", count=count)
+
+
+def log_decay_fit_skipped_low_support(count: int) -> None:
+    """Emitted when (market, reason_code) groups have no band with sufficient support."""
+    _event("decay_fit_skipped_low_support", count=count)
