@@ -77,3 +77,27 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_evidence_ingestion_start(fixture_id: str, item_count: int) -> float:
+    """Log evidence ingestion start; return start time."""
+    _event("evidence_ingestion_start", fixture_id=fixture_id, item_count=item_count)
+    return time.perf_counter()
+
+
+def log_evidence_ingestion_end(
+    fixture_id: str,
+    duration_seconds: float,
+    items_written: int,
+    deduped: int,
+    conflict_detected: int,
+) -> None:
+    """Log evidence ingestion end with counts."""
+    _event(
+        "evidence_ingestion_end",
+        fixture_id=fixture_id,
+        duration_seconds=round(duration_seconds, 4),
+        evidence_items_written=items_written,
+        evidence_deduped=deduped,
+        evidence_conflict_detected=conflict_detected,
+    )
