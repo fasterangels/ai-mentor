@@ -77,3 +77,8 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_safety_summary_emitted(flags: Dict[str, Any]) -> None:
+    """Log that safety_summary was emitted in report (bounded flags dict)."""
+    _event("safety_summary_emitted", **flags)

@@ -98,3 +98,39 @@ async def test_shadow_pipeline_sample_platform_deterministic_checksums(test_db) 
     assert report1["evaluation_report_checksum"] == report2["evaluation_report_checksum"]
     assert report1["proposal"]["proposal_checksum"] == report2["proposal"]["proposal_checksum"]
     assert report1["audit"]["snapshots_checksum"] == report2["audit"]["snapshots_checksum"]
+
+
+@pytest.mark.asyncio
+async def test_shadow_pipeline_report_includes_safety_summary_with_defaults_false(test_db, monkeypatch) -> None:
+    """Report contains safety_summary.flags; all booleans; with env unset all are false."""
+    for name in (
+        "LIVE_IO_ALLOWED",
+        "SNAPSHOT_WRITES_ALLOWED",
+        "SNAPSHOT_REPLAY_ENABLED",
+        "INJ_NEWS_ENABLED",
+        "INJ_NEWS_SHADOW_ATTACH_ENABLED",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    async with get_database_manager().session() as session:
+        report = await run_shadow_pipeline(
+            session,
+            connector_name="sample_platform",
+            match_id="sample_platform_match_001",
+            final_score={"home": 2, "away": 1},
+            status="FINAL",
+            now_utc=now,
+        )
+    assert report.get("error") is None
+    assert "safety_summary" in report
+    summary = report["safety_summary"]
+    assert "flags" in summary
+    assert summary.get("note") == "All unsafe modes require explicit opt-in"
+    flags = summary["flags"]
+    for key, val in flags.items():
+        assert isinstance(val, bool), f"safety_summary.flags.{key} must be bool, got {type(val)}"
+    assert flags.get("LIVE_IO_ALLOWED") is False
+    assert flags.get("SNAPSHOT_WRITES_ALLOWED") is False
+    assert flags.get("SNAPSHOT_REPLAY_ENABLED") is False
+    assert flags.get("INJ_NEWS_ENABLED") is False
+    assert flags.get("INJ_NEWS_SHADOW_ATTACH_ENABLED") is False
