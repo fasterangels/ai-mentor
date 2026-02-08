@@ -265,3 +265,28 @@ def log_graduation_eval_written(json_path: str, md_path: str) -> None:
 def log_graduation_eval_failed_criteria(count: int) -> None:
     """Emitted when one or more criteria failed (count of failed)."""
     _event("graduation_eval_failed_criteria", count=count)
+
+
+def log_live_awareness_start(fixture_id: str) -> float:
+    """Log live awareness run start; return start time for duration."""
+    _event("live_awareness_start", fixture_id=fixture_id)
+    return time.perf_counter()
+
+
+def log_live_awareness_end(
+    fixture_id: str,
+    has_live_shadow: bool,
+    duration_seconds: float,
+) -> None:
+    """Log live awareness run end with result and duration."""
+    _event(
+        "live_awareness_end",
+        fixture_id=fixture_id,
+        has_live_shadow=has_live_shadow,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_live_awareness_written(json_path: str, md_path: str) -> None:
+    """Emitted when live_awareness.json and live_awareness.md are written."""
+    _event("live_awareness_written", json_path=json_path, md_path=md_path)

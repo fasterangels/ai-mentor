@@ -69,13 +69,23 @@ async def _main() -> int:
         print("refusal_optimize_shadow", ",".join(paths), result.get("decisions_count", 0))
         return 0
 
-    if getattr(args, "mode", None) == "graduation-eval":
-        from runner.graduation_runner import run_graduation_eval
-        result = run_graduation_eval(reports_dir=args.output_dir)
-        if result.get("error"):
-            print("graduation_eval error:", result["error"], file=sys.stderr)
+    if getattr(args, "mode", None) == "live-awareness":
+        fixture_id = (getattr(args, "fixture_id", None) or "").strip()
+        if not fixture_id:
+            print("error: --fixture-id required for --mode live-awareness", file=sys.stderr)
             return 1
-        print("graduation_eval", result.get("json_path", ""), result.get("md_path", ""), "overall_pass=" + str(result.get("overall_pass", False)))
+        from runner.live_awareness_runner import run_live_awareness
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_live_awareness(session, reports_dir=args.output_dir, fixture_id=fixture_id)
+        finally:
+            await dispose_database()
+        if result.get("error"):
+            print("live_awareness error:", result["error"], file=sys.stderr)
+            return 1
+        print("live_awareness", result.get("json_path", ""), result.get("md_path", ""), "has_live_shadow=" + str(result.get("has_live_shadow", False)))
         return 0
 
     now = _parse_now_utc(args.now_utc)
