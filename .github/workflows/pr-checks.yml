@@ -23,7 +23,10 @@ jobs:
           pip install -r backend/requirements.txt
       - name: Run backend tests
         run: |
-          cd backend && python -m pytest tests/ -v
+          cd backend && python -m pytest tests/ -v --ignore=tests/unit/test_late_data_replay_i1.py
+      - name: Run late-data replay tests (I1)
+        run: |
+          cd backend && PYTHONPATH=. python -m pytest tests/unit/test_late_data_replay_i1.py -v
 
   frontend-lint:
     runs-on: ubuntu-latest
