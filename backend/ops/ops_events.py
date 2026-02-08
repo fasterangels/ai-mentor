@@ -77,3 +77,34 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_worst_case_start(reports_dir: str) -> None:
+    """Log worst-case tracking run start."""
+    _event("worst_case_start", reports_dir=reports_dir)
+
+
+def log_worst_case_end(
+    reports_dir: str,
+    duration_seconds: float,
+    decisions_count: int,
+    rows_written: int,
+) -> None:
+    """Log worst-case tracking run end (deterministic)."""
+    _event(
+        "worst_case_end",
+        reports_dir=reports_dir,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+        rows_written=rows_written,
+    )
+
+
+def log_worst_case_written(csv_path: str, json_path: str, row_count: int) -> None:
+    """Log worst-case report files written."""
+    _event("worst_case_written", csv_path=csv_path, json_path=json_path, row_count=row_count)
+
+
+def log_worst_case_missing_inputs(detail: str) -> None:
+    """Log when optional sources are absent (e.g. no resolved runs)."""
+    _event("worst_case_missing_inputs", detail=detail)

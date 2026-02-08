@@ -125,13 +125,43 @@ def _run_ops_burn_in_run() -> int:
     return asyncio.run(_run())
 
 
+def _run_ops_worst_case_tracking() -> int:
+    """Run worst-case tracking only; write worst_case_errors_top.csv and .json under REPORTS_DIR; exit."""
+    reports_dir = os.environ.get("REPORTS_DIR", "reports")
+
+    async def _run() -> int:
+        import models  # noqa: F401
+        from core.config import get_settings
+        from core.database import init_database, dispose_database, get_database_manager
+        from runner.worst_case_runner import run_worst_case_tracking
+
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_worst_case_tracking(
+                    session,
+                    reports_dir=reports_dir,
+                )
+        finally:
+            await dispose_database()
+
+        if result.get("error") and result.get("detail"):
+            print(result["detail"], file=sys.stderr)
+        return 0
+
+    return asyncio.run(_run())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Backend entry: server or ops subcommand")
-    parser.add_argument("--ops", choices=["burn-in-run"], help="Run ops and exit (no server)")
+    parser.add_argument("--ops", choices=["burn-in-run", "worst-case-tracking"], help="Run ops and exit (no server)")
     args, _ = parser.parse_known_args()
 
     if getattr(args, "ops", None) == "burn-in-run":
         return _run_ops_burn_in_run()
+    if getattr(args, "ops", None) == "worst-case-tracking":
+        return _run_ops_worst_case_tracking()
 
     # Default: start uvicorn server
     if getattr(sys, "frozen", False):
