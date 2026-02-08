@@ -8,11 +8,14 @@ from modeling.uncertainty import (
     LOW_EFFECTIVE_CONFIDENCE_THRESHOLD,
     STALE_EVIDENCE_BANDS,
     compute_uncertainty_profile,
+    compute_would_refuse,
 )
 from modeling.uncertainty.model import (
     LOW_EFFECTIVE_CONFIDENCE,
     LOW_SUPPORT,
     STALE_EVIDENCE,
+    UncertaintyProfile,
+    UncertaintySignal,
 )
 from modeling.reason_decay.model import DecayModelParams, FitDiagnostics, BAND_ORDER
 
@@ -149,3 +152,39 @@ class TestMissingOptionalInputs:
         profile = compute_uncertainty_profile(rec, [], params_map)
         low_sup = next(s for s in profile.signals if s.signal_type == LOW_SUPPORT)
         assert low_sup.triggered is True
+
+
+class TestWouldRefuse:
+    """would_refuse = (STALE_EVIDENCE and LOW_EFFECTIVE_CONFIDENCE) OR (>=2 signals triggered)."""
+
+    def test_would_refuse_stale_and_low_conf(self) -> None:
+        profile = UncertaintyProfile("r1", signals=[
+            UncertaintySignal(STALE_EVIDENCE, "7d+", True),
+            UncertaintySignal(LOW_EFFECTIVE_CONFIDENCE, "threshold_0.5", True),
+            UncertaintySignal(LOW_SUPPORT, "decay_fit_low_support", False),
+        ])
+        assert compute_would_refuse(profile) is True
+
+    def test_would_refuse_two_signals(self) -> None:
+        profile = UncertaintyProfile("r1", signals=[
+            UncertaintySignal(STALE_EVIDENCE, "7d+", False),
+            UncertaintySignal(LOW_EFFECTIVE_CONFIDENCE, "threshold_0.5", True),
+            UncertaintySignal(LOW_SUPPORT, "decay_fit_low_support", True),
+        ])
+        assert compute_would_refuse(profile) is True
+
+    def test_would_not_refuse_one_signal(self) -> None:
+        profile = UncertaintyProfile("r1", signals=[
+            UncertaintySignal(STALE_EVIDENCE, "7d+", True),
+            UncertaintySignal(LOW_EFFECTIVE_CONFIDENCE, "threshold_0.5", False),
+            UncertaintySignal(LOW_SUPPORT, "decay_fit_low_support", False),
+        ])
+        assert compute_would_refuse(profile) is False
+
+    def test_would_not_refuse_zero_signals(self) -> None:
+        profile = UncertaintyProfile("r1", signals=[
+            UncertaintySignal(STALE_EVIDENCE, "0-30m", False),
+            UncertaintySignal(LOW_EFFECTIVE_CONFIDENCE, "threshold_0.5", False),
+            UncertaintySignal(LOW_SUPPORT, "decay_fit_low_support", False),
+        ])
+        assert compute_would_refuse(profile) is False

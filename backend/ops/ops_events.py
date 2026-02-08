@@ -285,3 +285,23 @@ def log_confidence_penalty_shadow_end(row_count: int, duration_seconds: float) -
 def log_confidence_penalty_shadow_written(count: int) -> None:
     """Emitted when confidence penalty shadow reports are written."""
     _event("confidence_penalty_shadow_written", count=count)
+
+
+def log_uncertainty_shadow_start() -> float:
+    """Log uncertainty shadow run start; return start time."""
+    _event("uncertainty_shadow_start")
+    return time.perf_counter()
+
+
+def log_uncertainty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log uncertainty shadow run end."""
+    _event(
+        "uncertainty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_uncertainty_shadow_written(count: int) -> None:
+    """Emitted when uncertainty shadow reports are written."""
+    _event("uncertainty_shadow_written", count=count)

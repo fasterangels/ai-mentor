@@ -116,6 +116,31 @@ async def _run_confidence_penalty_shadow() -> int:
         await dispose_database()
 
 
+async def _run_uncertainty_shadow() -> int:
+    """Run uncertainty-shadow (H3): simulate would_refuse; report only. No refusals enforced."""
+    import models  # noqa: F401
+    from core.config import get_settings
+    from core.database import init_database, dispose_database, get_database_manager
+    from runner.uncertainty_shadow_runner import run_uncertainty_shadow_mode
+
+    settings = get_settings()
+    await init_database(settings.database_url)
+    try:
+        async with get_database_manager().session() as session:
+            result = await run_uncertainty_shadow_mode(session, reports_dir="reports")
+        print(
+            "uncertainty-shadow ok: row_count=%s csv=%s json=%s"
+            % (
+                result.get("row_count", 0),
+                result.get("report_path_csv", ""),
+                result.get("report_path_json", ""),
+            )
+        )
+        return 0
+    finally:
+        await dispose_database()
+
+
 def _run_decay_fit() -> int:
     """Run decay-fit (H1): read G4 staleness JSON, fit params, write artifacts. No DB."""
     from runner.decay_fit_runner import run_decay_fit_mode
@@ -161,13 +186,13 @@ async def _run_staleness_eval() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Live snapshot: harness, live-shadow (G1), delta-eval (G3), staleness-eval (G4), decay-fit (H1), confidence-penalty-shadow (H2)"
+        description="Live snapshot: harness, live-shadow (G1), delta-eval (G3), staleness-eval (G4), decay-fit (H1), confidence-penalty-shadow (H2), uncertainty-shadow (H3)"
     )
     parser.add_argument(
         "--mode",
-        choices=["harness", "live-shadow", "delta-eval", "staleness-eval", "decay-fit", "confidence-penalty-shadow"],
+        choices=["harness", "live-shadow", "delta-eval", "staleness-eval", "decay-fit", "confidence-penalty-shadow", "uncertainty-shadow"],
         default="harness",
-        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded; staleness-eval: metrics by reason/age; decay-fit: fit decay params; confidence-penalty-shadow: shadow report only",
+        help="harness: gates only; live-shadow: fetch -> snapshots; delta-eval: live vs recorded; staleness-eval: metrics by reason/age; decay-fit: fit decay params; confidence-penalty-shadow: shadow report; uncertainty-shadow: refusal simulation only",
     )
     args = parser.parse_args()
 
@@ -181,6 +206,8 @@ def main() -> int:
         return _run_decay_fit()
     if args.mode == "confidence-penalty-shadow":
         return asyncio.run(_run_confidence_penalty_shadow())
+    if args.mode == "uncertainty-shadow":
+        return asyncio.run(_run_uncertainty_shadow())
     return _run_harness()
 
 

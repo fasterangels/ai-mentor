@@ -104,3 +104,21 @@ def compute_uncertainty_profile(
     ))
 
     return UncertaintyProfile(run_id=run_id, signals=signals)
+
+
+def compute_would_refuse(profile: UncertaintyProfile) -> bool:
+    """
+    Simulated refusal rule (fixed). Would-refuse = TRUE if:
+    - (STALE_EVIDENCE AND LOW_EFFECTIVE_CONFIDENCE) OR
+    - (>=2 uncertainty signals triggered).
+    Simulation only; no enforcement.
+    """
+    triggered = [s for s in profile.signals if s.triggered]
+    count = len(triggered)
+    stale = any(s.signal_type == STALE_EVIDENCE for s in triggered)
+    low_conf = any(s.signal_type == LOW_EFFECTIVE_CONFIDENCE for s in triggered)
+    if stale and low_conf:
+        return True
+    if count >= 2:
+        return True
+    return False

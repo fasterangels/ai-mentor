@@ -122,3 +122,20 @@ def test_log_confidence_penalty_shadow_emits(caplog: pytest.LogCaptureFixture) -
     assert "confidence_penalty_shadow_written" in caplog.text and "5" in caplog.text
     log_confidence_penalty_shadow_end(5, 0.1)
     assert "confidence_penalty_shadow_end" in caplog.text and "row_count" in caplog.text
+
+
+def test_log_uncertainty_shadow_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """uncertainty_shadow start/end/written emit."""
+    from ops.ops_events import (
+        log_uncertainty_shadow_end,
+        log_uncertainty_shadow_start,
+        log_uncertainty_shadow_written,
+    )
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_uncertainty_shadow_start()
+    assert isinstance(t, float)
+    assert "uncertainty_shadow_start" in caplog.text
+    log_uncertainty_shadow_written(3)
+    assert "uncertainty_shadow_written" in caplog.text and "3" in caplog.text
+    log_uncertainty_shadow_end(3, 0.05)
+    assert "uncertainty_shadow_end" in caplog.text and "row_count" in caplog.text
