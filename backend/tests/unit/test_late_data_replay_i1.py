@@ -12,13 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-# Force backend at sys.path[0] (conftest does the same; ensure we are first)
 _backend = Path(__file__).resolve().parent.parent.parent
-if not (_backend / "pipeline").exists():
-    for _cand in [Path.cwd() / "backend", Path.cwd(), Path.cwd().parent / "backend"]:
-        if (_cand / "pipeline").exists():
-            _backend = _cand
-            break
 sys.path.insert(0, str(_backend))
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
