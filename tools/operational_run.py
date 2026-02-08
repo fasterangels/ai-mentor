@@ -52,7 +52,8 @@ def _parse_now_utc(s: str | None) -> datetime | None:
 
 
 async def _main() -> int:
-    parser = argparse.ArgumentParser(description="Operational run: shadow batch + report + index")
+    parser = argparse.ArgumentParser(description="Operational run: shadow batch + report + index, or worst-case-tracking")
+    parser.add_argument("--mode", default=None, choices=["worst-case-tracking"], help="Run mode (default: shadow batch). Must NOT run by default.")
     parser.add_argument("--connector", default="dummy", help="Connector name (default: dummy)")
     parser.add_argument("--output-dir", default="reports", help="Reports directory (default: reports)")
     parser.add_argument("--match-ids", default=None, help="Optional comma-separated match IDs")
@@ -60,6 +61,18 @@ async def _main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Do not persist SnapshotResolution or write cache")
     parser.add_argument("--activation", action="store_true", help="Enable activation (respects env gates)")
     args = parser.parse_args()
+
+    if getattr(args, "mode", None) == "worst-case-tracking":
+        from runner.worst_case_runner import run_worst_case_tracking
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_worst_case_tracking(session, reports_dir=args.output_dir)
+        finally:
+            await dispose_database()
+        print(f"worst_case_tracking,{result.get('csv_path', '')},{result.get('json_path', '')},{result.get('rows_written', 0)}")
+        return 0
 
     now = _parse_now_utc(args.now_utc)
     if now is None:

@@ -31,6 +31,7 @@ def _decision(
     would_refuse: bool = False,
     signals: list | None = None,
     snapshot_ids: list | None = None,
+    snapshot_type: str | None = None,
 ) -> EvaluatedDecision:
     shadow = UncertaintyShadow(would_refuse=would_refuse, triggered_uncertainty_signals=signals) if (would_refuse or signals) else None
     return EvaluatedDecision(
@@ -41,6 +42,7 @@ def _decision(
         original_confidence=original_confidence,
         uncertainty_shadow=shadow,
         snapshot_ids=snapshot_ids,
+        snapshot_type=snapshot_type,
     )
 
 
@@ -91,19 +93,21 @@ def test_stable_sort_score_desc_then_fixture_id() -> None:
 
 
 def test_report_triggered_signals_and_snapshot_ids() -> None:
-    """WorstCaseRow includes triggered_uncertainty_signals and snapshot_ids when provided."""
+    """WorstCaseRow includes triggered_uncertainty_signals, snapshot_ids, and snapshot_type when provided."""
     d = _decision(
         fixture_id="fx",
         outcome="FAILURE",
         would_refuse=True,
         signals=["stale", "delta"],
         snapshot_ids=["s1", "s2"],
+        snapshot_type="live_shadow",
     )
     report = compute_worst_case_report([d])
     assert len(report.rows) == 1
     r = report.rows[0]
     assert r.triggered_uncertainty_signals == ["stale", "delta"]
     assert r.snapshot_ids == ["s1", "s2"]
+    assert r.snapshot_type == "live_shadow"
 
 
 def test_report_computed_at_utc_set() -> None:

@@ -26,6 +26,7 @@ class EvaluatedDecision:
     original_confidence: float  # 0..1
     uncertainty_shadow: Optional[UncertaintyShadow] = None
     snapshot_ids: Optional[List[str]] = None
+    snapshot_type: Optional[str] = None  # "recorded" | "live_shadow" when known
 
 
 @dataclass
@@ -40,6 +41,7 @@ class WorstCaseRow:
     worst_case_score: float
     triggered_uncertainty_signals: Optional[List[str]] = None
     snapshot_ids: Optional[List[str]] = None
+    snapshot_type: Optional[str] = None  # "recorded" | "live_shadow" for LIVE_SHADOW focus
 
 
 @dataclass

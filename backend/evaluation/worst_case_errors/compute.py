@@ -46,6 +46,7 @@ def compute_worst_case_report(
                 worst_case_score=score,
                 triggered_uncertainty_signals=signals,
                 snapshot_ids=list(d.snapshot_ids) if d.snapshot_ids else None,
+                snapshot_type=d.snapshot_type,
             )
         )
 
