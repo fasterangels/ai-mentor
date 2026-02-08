@@ -105,3 +105,20 @@ def test_log_decay_fit_skipped_low_support_emits(caplog: pytest.LogCaptureFixtur
     caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
     log_decay_fit_skipped_low_support(2)
     assert "decay_fit_skipped_low_support" in caplog.text and "2" in caplog.text
+
+
+def test_log_confidence_penalty_shadow_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """confidence_penalty_shadow start/end/written emit."""
+    from ops.ops_events import (
+        log_confidence_penalty_shadow_end,
+        log_confidence_penalty_shadow_start,
+        log_confidence_penalty_shadow_written,
+    )
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_confidence_penalty_shadow_start()
+    assert isinstance(t, float)
+    assert "confidence_penalty_shadow_start" in caplog.text
+    log_confidence_penalty_shadow_written(5)
+    assert "confidence_penalty_shadow_written" in caplog.text and "5" in caplog.text
+    log_confidence_penalty_shadow_end(5, 0.1)
+    assert "confidence_penalty_shadow_end" in caplog.text and "row_count" in caplog.text

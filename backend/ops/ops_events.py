@@ -265,3 +265,23 @@ def log_decay_fit_written(count: int) -> None:
 def log_decay_fit_skipped_low_support(count: int) -> None:
     """Emitted when (market, reason_code) groups have no band with sufficient support."""
     _event("decay_fit_skipped_low_support", count=count)
+
+
+def log_confidence_penalty_shadow_start() -> float:
+    """Log confidence penalty shadow run start; return start time."""
+    _event("confidence_penalty_shadow_start")
+    return time.perf_counter()
+
+
+def log_confidence_penalty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log confidence penalty shadow run end."""
+    _event(
+        "confidence_penalty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_confidence_penalty_shadow_written(count: int) -> None:
+    """Emitted when confidence penalty shadow reports are written."""
+    _event("confidence_penalty_shadow_written", count=count)
