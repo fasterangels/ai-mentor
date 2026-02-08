@@ -1,0 +1,20 @@
+"""Refusal threshold optimization (shadow-only): grid search over thresholds using uncertainty-shadow + outcomes."""
+
+from .grid_search import grid_search_best_thresholds, would_refuse
+from .model import (
+    ALPHA,
+    BestThresholds,
+    ShadowDecision,
+    STALE_BANDS,
+    effective_confidence_grid,
+)
+
+__all__ = [
+    "ALPHA",
+    "BestThresholds",
+    "ShadowDecision",
+    "STALE_BANDS",
+    "effective_confidence_grid",
+    "grid_search_best_thresholds",
+    "would_refuse",
+]
