@@ -9,6 +9,11 @@ Unit tests for I1 Part A: late-data replay scenario generator.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
+_backend = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_backend))
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
 from replay.late_data.generate import (
