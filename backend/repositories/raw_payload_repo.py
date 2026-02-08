@@ -50,3 +50,29 @@ class RawPayloadRepository(BaseRepository[RawPayload]):
         stmt = select(RawPayload).where(RawPayload.payload_hash == payload_hash)
         result = await self.session.execute(stmt)
         return result.first() is not None
+
+    async def get_by_hash(self, payload_hash: str) -> Optional[RawPayload]:
+        """Return first RawPayload with this payload_hash or None."""
+        stmt = select(RawPayload).where(RawPayload.payload_hash == payload_hash).limit(1)
+        result = await self.session.execute(stmt)
+        row = result.scalars().first()
+        return row
+
+    async def list_rows_by_source(self, source_name: str) -> List[RawPayload]:
+        """Return all RawPayload rows for the given source_name (e.g. pipeline_cache, live_shadow)."""
+        stmt = select(RawPayload).where(RawPayload.source_name == source_name).order_by(RawPayload.id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_rows_by_source_and_match_id(
+        self, source_name: str, match_id: str
+    ) -> List[RawPayload]:
+        """Return RawPayload rows for the given source and related_match_id (e.g. pipeline_cache, match_id)."""
+        stmt = (
+            select(RawPayload)
+            .where(RawPayload.source_name == source_name)
+            .where(RawPayload.related_match_id == match_id)
+            .order_by(RawPayload.id)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

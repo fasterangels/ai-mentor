@@ -11,6 +11,7 @@ from repositories.fetch_log_repo import FetchLogRepository
 from repositories.raw_payload_repo import RawPayloadRepository
 from .cache import cache_payload, get_cached_payload
 from .consensus import build_consensus
+from .snapshot_envelope import build_envelope_for_recorded
 from .quality import assess_quality
 from .sources import BaseSource, StubFixturesSource, StubStatsSource
 from .types import DomainData, EvidencePack, PipelineInput, PipelineResult
@@ -159,15 +160,28 @@ async def run_pipeline(
             continue
 
         # Step 3: Normalize (already done in _fetch_from_sources)
-        # Step 4: Persist raw payloads (skip when dry_run)
+        # Step 4: Persist raw payloads with G2 envelope (skip when dry_run)
         if not dry_run:
+            now = datetime.now(timezone.utc)
             for payload in payloads:
                 payload_hash = _compute_payload_hash(payload)
+                envelope = build_envelope_for_recorded(
+                    payload=payload,
+                    snapshot_id=payload_hash,
+                    created_at_utc=now,
+                    source_name=payload.get("source_name", "recorded"),
+                )
+                payload_json = json.dumps(
+                    {"metadata": envelope.to_dict(), "payload": payload},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                )
                 await raw_payload_repo.add_payload(
                     source_name=payload["source_name"],
                     domain=domain,
                     payload_hash=payload_hash,
-                    payload_json=json.dumps(payload, default=str),
+                    payload_json=payload_json,
                     related_match_id=input_data.match_id,
                 )
 

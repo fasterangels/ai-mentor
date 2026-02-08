@@ -127,11 +127,44 @@ def _run_ops_burn_in_run() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Backend entry: server or ops subcommand")
-    parser.add_argument("--ops", choices=["burn-in-run"], help="Run ops and exit (no server)")
+    parser.add_argument("--ops", choices=["burn-in-run", "graduation-eval", "live-awareness"], help="Run ops and exit (no server)")
     args, _ = parser.parse_known_args()
 
     if getattr(args, "ops", None) == "burn-in-run":
         return _run_ops_burn_in_run()
+
+    if getattr(args, "ops", None) == "live-awareness":
+        fixture_id = os.environ.get("FIXTURE_ID", "").strip()
+        if not fixture_id:
+            print("FIXTURE_ID env required for --ops live-awareness", file=sys.stderr)
+            return 1
+        async def _run_live_awareness():
+            import models  # noqa: F401
+            from core.config import get_settings
+            from core.database import init_database, dispose_database, get_database_manager
+            from runner.live_awareness_runner import run_live_awareness
+            reports_dir = os.environ.get("REPORTS_DIR", "reports")
+            settings = get_settings()
+            await init_database(settings.database_url)
+            try:
+                async with get_database_manager().session() as session:
+                    return await run_live_awareness(session, reports_dir=reports_dir, fixture_id=fixture_id)
+            finally:
+                await dispose_database()
+        result = asyncio.run(_run_live_awareness())
+        if result.get("error"):
+            print(result.get("error"), file=sys.stderr)
+            return 1
+        return 0
+
+    if getattr(args, "ops", None) == "graduation-eval":
+        from runner.graduation_runner import run_graduation_eval
+        reports_dir = os.environ.get("REPORTS_DIR", "reports")
+        result = run_graduation_eval(reports_dir=reports_dir)
+        if result.get("error"):
+            print(result.get("error"), file=sys.stderr)
+            return 1
+        return 0
 
     # Default: start uvicorn server
     if getattr(sys, "frozen", False):
