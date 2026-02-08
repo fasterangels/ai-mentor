@@ -22,10 +22,8 @@ jobs:
           python -m pip install -U pip
           pip install -r backend/requirements.txt
       - name: Run backend tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
-          python -m pytest backend/tests/ -v
+          cd backend && python -m pytest tests/ -v
 
   frontend-lint:
     runs-on: ubuntu-latest

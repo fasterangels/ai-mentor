@@ -13,7 +13,8 @@ import sys
 from pathlib import Path
 
 _backend = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_backend))
+if str(_backend) not in sys.path:
+    sys.path.insert(0, str(_backend))
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
 from replay.late_data.generate import (
