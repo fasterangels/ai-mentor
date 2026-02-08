@@ -127,11 +127,20 @@ def _run_ops_burn_in_run() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Backend entry: server or ops subcommand")
-    parser.add_argument("--ops", choices=["burn-in-run"], help="Run ops and exit (no server)")
+    parser.add_argument("--ops", choices=["burn-in-run", "graduation-eval"], help="Run ops and exit (no server)")
     args, _ = parser.parse_known_args()
 
     if getattr(args, "ops", None) == "burn-in-run":
         return _run_ops_burn_in_run()
+
+    if getattr(args, "ops", None) == "graduation-eval":
+        from runner.graduation_runner import run_graduation_eval
+        reports_dir = os.environ.get("REPORTS_DIR", "reports")
+        result = run_graduation_eval(reports_dir=reports_dir)
+        if result.get("error"):
+            print(result.get("error"), file=sys.stderr)
+            return 1
+        return 0
 
     # Default: start uvicorn server
     if getattr(sys, "frozen", False):

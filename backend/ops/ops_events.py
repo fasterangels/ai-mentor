@@ -235,3 +235,33 @@ def log_staleness_eval_written(count: int) -> None:
 def log_staleness_eval_missing_timestamps(count: int) -> None:
     """Emitted when legacy snapshots default (missing observed_at_utc)."""
     _event("staleness_eval_missing_timestamps", count=count)
+
+
+def log_graduation_eval_start() -> float:
+    """Log graduation evaluation start; return start time for duration."""
+    _event("graduation_eval_start")
+    return time.perf_counter()
+
+
+def log_graduation_eval_end(
+    overall_pass: bool,
+    criteria_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log graduation evaluation end with result and duration."""
+    _event(
+        "graduation_eval_end",
+        overall_pass=overall_pass,
+        criteria_count=criteria_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_graduation_eval_written(json_path: str, md_path: str) -> None:
+    """Emitted when graduation_result.json and graduation_result.md are written."""
+    _event("graduation_eval_written", json_path=json_path, md_path=md_path)
+
+
+def log_graduation_eval_failed_criteria(count: int) -> None:
+    """Emitted when one or more criteria failed (count of failed)."""
+    _event("graduation_eval_failed_criteria", count=count)
