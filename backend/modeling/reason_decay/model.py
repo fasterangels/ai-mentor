@@ -75,6 +75,22 @@ class DecayModelParams:
         """Stable JSON with sorted keys."""
         return json.dumps(self.to_dict(), sort_keys=True, indent=2, default=str)
 
+    def penalty_for(self, age_band: str) -> float:
+        """
+        Return penalty factor for the given age band (0..1). Used by H2 confidence penalty.
+        If age_band not in bands, returns 1.0 (no penalty). Result is clamped to [0, 1].
+        """
+        if not self.penalty_by_band or not self.bands:
+            return 1.0
+        try:
+            i = self.bands.index(age_band)
+        except ValueError:
+            return 1.0
+        if i >= len(self.penalty_by_band):
+            return 1.0
+        p = self.penalty_by_band[i]
+        return max(0.0, min(1.0, float(p)))
+
 
 def params_from_dict(d: Dict[str, Any]) -> DecayModelParams:
     """Deserialize from dict (e.g. JSON load)."""
