@@ -1,4 +1,4 @@
-﻿name: pr-checks
+name: pr-checks
 
 on:
   pull_request:
@@ -23,7 +23,7 @@ jobs:
           pip install -r backend/requirements.txt
       - name: Run backend tests
         run: |
-          python -m pytest backend/tests/ -v
+          PYTHONPATH=backend python -m pytest backend/tests/ -v
 
   frontend-lint:
     runs-on: ubuntu-latest
