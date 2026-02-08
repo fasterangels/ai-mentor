@@ -26,7 +26,7 @@ jobs:
           cd backend && python -m pytest tests/ -v --ignore=tests/unit/test_late_data_replay_i1.py
       - name: Run late-data replay tests (I1)
         run: |
-          cd backend && PYTHONPATH=. python -m pytest tests/unit/test_late_data_replay_i1.py -v
+          cd backend && python -c "import sys; sys.path.insert(0, '.'); import pytest; sys.exit(pytest.main(['-v', 'tests/unit/test_late_data_replay_i1.py']))"
 
   frontend-lint:
     runs-on: ubuntu-latest
