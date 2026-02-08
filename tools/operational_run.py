@@ -69,23 +69,13 @@ async def _main() -> int:
         print("refusal_optimize_shadow", ",".join(paths), result.get("decisions_count", 0))
         return 0
 
-    if getattr(args, "mode", None) == "live-awareness":
-        fixture_id = (getattr(args, "fixture_id", None) or "").strip()
-        if not fixture_id:
-            print("error: --fixture-id required for --mode live-awareness", file=sys.stderr)
-            return 1
-        from runner.live_awareness_runner import run_live_awareness
-        settings = get_settings()
-        await init_database(settings.database_url)
-        try:
-            async with get_database_manager().session() as session:
-                result = await run_live_awareness(session, reports_dir=args.output_dir, fixture_id=fixture_id)
-        finally:
-            await dispose_database()
+    if getattr(args, "mode", None) == "go-no-go":
+        from runner.go_no_go_runner import run_go_no_go
+        result = run_go_no_go(reports_dir=args.output_dir)
         if result.get("error"):
-            print("live_awareness error:", result["error"], file=sys.stderr)
+            print("go_no_go error:", result["error"], file=sys.stderr)
             return 1
-        print("live_awareness", result.get("json_path", ""), result.get("md_path", ""), "has_live_shadow=" + str(result.get("has_live_shadow", False)))
+        print("go_no_go", result.get("json_path", ""), result.get("md_path", ""), "decision=" + str(result.get("decision", "")))
         return 0
 
     now = _parse_now_utc(args.now_utc)

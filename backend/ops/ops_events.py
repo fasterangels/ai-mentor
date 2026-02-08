@@ -290,3 +290,19 @@ def log_live_awareness_end(
 def log_live_awareness_written(json_path: str, md_path: str) -> None:
     """Emitted when live_awareness.json and live_awareness.md are written."""
     _event("live_awareness_written", json_path=json_path, md_path=md_path)
+
+
+def log_go_no_go_start() -> float:
+    """Log go/no-go run start; return start time for duration."""
+    _event("go_no_go_start")
+    return time.perf_counter()
+
+
+def log_go_no_go_end(decision: str, duration_seconds: float) -> None:
+    """Log go/no-go run end with decision and duration."""
+    _event("go_no_go_end", decision=decision, duration_seconds=round(duration_seconds, 4))
+
+
+def log_go_no_go_written(json_path: str, md_path: str) -> None:
+    """Emitted when go_no_go_decision.json and go_no_go_decision.md are written."""
+    _event("go_no_go_written", json_path=json_path, md_path=md_path)
