@@ -14,8 +14,13 @@ from pathlib import Path
 
 # Force backend at sys.path[0] so it is found before the test dir pytest adds (repo root or CI)
 _backend = Path(__file__).resolve().parent.parent.parent
+if not (_backend / "pipeline").exists():
+    for _cand in [Path.cwd() / "backend", Path.cwd(), Path.cwd().parent / "backend"]:
+        if (_cand / "pipeline").exists():
+            _backend = _cand
+            break
 _add = str(_backend)
-if sys.path[0:1] != [_add]:
+if _add not in sys.path:
     sys.path.insert(0, _add)
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
