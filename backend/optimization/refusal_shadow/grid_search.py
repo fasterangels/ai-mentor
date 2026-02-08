@@ -162,3 +162,30 @@ def _run_grid(
     # Best is first (smallest key: -safety is smallest when safety is highest, etc.)
     _, _, best = candidates[0]
     results[market_key] = best
+
+
+def full_grid_results(
+    decisions: List[ShadowDecision],
+    markets: Optional[List[str]] = None,
+) -> List[Tuple[Optional[str], float, str, float, float, float, int]]:
+    """
+    Return full grid as list of (market, effective_confidence_threshold, stale_band_threshold,
+    refusal_rate, accuracy_on_non_refused, safety_score, support_total) for CSV/reporting.
+    Deterministic order: overall (market=None) first, then each market; within each, eff_grid × STALE_BANDS.
+    """
+    eff_grid = effective_confidence_grid()
+    rows: List[Tuple[Optional[str], float, str, float, float, float, int]] = []
+
+    def emit(market_key: Optional[str], decs: List[ShadowDecision]) -> None:
+        for eff in eff_grid:
+            for stale in STALE_BANDS:
+                rr, acc, safety, total, _, _, _, _ = _evaluate_thresholds(decs, eff, stale)
+                rows.append((market_key, eff, stale, rr, acc, safety, total))
+
+    emit(None, decisions)
+    if markets is not None:
+        for m in sorted(markets):
+            subset = [d for d in decisions if d.market == m]
+            emit(m, subset)
+
+    return rows

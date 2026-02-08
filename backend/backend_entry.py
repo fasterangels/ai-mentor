@@ -125,13 +125,25 @@ def _run_ops_burn_in_run() -> int:
     return asyncio.run(_run())
 
 
+def _run_ops_refusal_optimize_shadow() -> int:
+    """Run refusal optimization (shadow-only); write artifacts under REPORTS_DIR; exit."""
+    reports_dir = os.environ.get("REPORTS_DIR", "reports")
+    from runner.refusal_optimization_runner import run_refusal_optimization
+    result = run_refusal_optimization(reports_dir=reports_dir)
+    if result.get("detail"):
+        print(result["detail"], file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Backend entry: server or ops subcommand")
-    parser.add_argument("--ops", choices=["burn-in-run"], help="Run ops and exit (no server)")
+    parser.add_argument("--ops", choices=["burn-in-run", "refusal-optimize-shadow"], help="Run ops and exit (no server)")
     args, _ = parser.parse_known_args()
 
     if getattr(args, "ops", None) == "burn-in-run":
         return _run_ops_burn_in_run()
+    if getattr(args, "ops", None) == "refusal-optimize-shadow":
+        return _run_ops_refusal_optimize_shadow()
 
     # Default: start uvicorn server
     if getattr(sys, "frozen", False):
