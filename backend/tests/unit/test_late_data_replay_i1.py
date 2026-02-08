@@ -9,6 +9,13 @@ Unit tests for I1 Part A: late-data replay scenario generator.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
+# Ensure backend is on path when run from repo root or when pytest collects from backend/tests
+_backend = Path(__file__).resolve().parent.parent.parent
+if _backend.name == "backend" and str(_backend) not in sys.path:
+    sys.path.insert(0, str(_backend))
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
 from replay.late_data.generate import (
