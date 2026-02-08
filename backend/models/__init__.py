@@ -11,6 +11,7 @@ NOTE:
 from .base import Base
 from .analysis_run import AnalysisRun
 from .competition import Competition
+from .evidence_item import EvidenceItemV1
 from .snapshot_resolution import SnapshotResolution
 from .fetch_log import SourceFetchLog
 from .match import Match
@@ -29,6 +30,7 @@ __all__ = [
     "Base",
     "AnalysisRun",
     "Competition",
+    "EvidenceItemV1",
     "SnapshotResolution",
     "SourceFetchLog",
     "Match",
