@@ -52,7 +52,8 @@ def _parse_now_utc(s: str | None) -> datetime | None:
 
 
 async def _main() -> int:
-    parser = argparse.ArgumentParser(description="Operational run: shadow batch + report + index")
+    parser = argparse.ArgumentParser(description="Operational run: shadow batch + report + index, or refusal-optimize-shadow")
+    parser.add_argument("--mode", default=None, choices=["refusal-optimize-shadow"], help="Run mode (default: shadow batch)")
     parser.add_argument("--connector", default="dummy", help="Connector name (default: dummy)")
     parser.add_argument("--output-dir", default="reports", help="Reports directory (default: reports)")
     parser.add_argument("--match-ids", default=None, help="Optional comma-separated match IDs")
@@ -60,6 +61,32 @@ async def _main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Do not persist SnapshotResolution or write cache")
     parser.add_argument("--activation", action="store_true", help="Enable activation (respects env gates)")
     args = parser.parse_args()
+
+    if getattr(args, "mode", None) == "refusal-optimize-shadow":
+        from runner.refusal_optimization_runner import run_refusal_optimization
+        result = run_refusal_optimization(reports_dir=args.output_dir)
+        paths = result.get("artifact_paths") or []
+        print("refusal_optimize_shadow", ",".join(paths), result.get("decisions_count", 0))
+        return 0
+
+    if getattr(args, "mode", None) == "live-awareness":
+        fixture_id = (getattr(args, "fixture_id", None) or "").strip()
+        if not fixture_id:
+            print("error: --fixture-id required for --mode live-awareness", file=sys.stderr)
+            return 1
+        from runner.live_awareness_runner import run_live_awareness
+        settings = get_settings()
+        await init_database(settings.database_url)
+        try:
+            async with get_database_manager().session() as session:
+                result = await run_live_awareness(session, reports_dir=args.output_dir, fixture_id=fixture_id)
+        finally:
+            await dispose_database()
+        if result.get("error"):
+            print("live_awareness error:", result["error"], file=sys.stderr)
+            return 1
+        print("live_awareness", result.get("json_path", ""), result.get("md_path", ""), "has_live_shadow=" + str(result.get("has_live_shadow", False)))
+        return 0
 
     now = _parse_now_utc(args.now_utc)
     if now is None:

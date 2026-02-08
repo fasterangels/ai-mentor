@@ -14,3 +14,20 @@
 ## Verification
 - CI tests enforce `/api/v1/analyze` 501 contract and OpenAPI exclusion
 - CI verifies pipeline/evaluation/tuner regression gates
+
+## Project Status — Completed (Deterministic / Offline-first)
+
+- **Canonical supported flow:** `/pipeline/shadow/run`
+- **Unsupported endpoints:**
+  - `/api/v1/analyze` → 501, excluded from OpenAPI
+- **Safety defaults:**
+  - Live IO disabled
+  - Snapshot writes disabled
+  - Replay disabled
+  - Shadow learning only
+- **Guarantees:**
+  - Deterministic outputs
+  - Explainable reasons with evidence
+  - Offline evaluation with ground truth
+  - Shadow-only evolution under constraints
+- **Note:** Any future capability must be added as shadow-first and audited.
