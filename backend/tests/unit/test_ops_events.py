@@ -16,8 +16,12 @@ import pytest
 
 from ops.ops_events import (
     OPS_LOGGER_NAME,
-    log_pipeline_start,
+    log_decay_fit_end,
+    log_decay_fit_skipped_low_support,
+    log_decay_fit_start,
+    log_decay_fit_written,
     log_pipeline_end,
+    log_pipeline_start,
     log_ingestion_source,
     log_evaluation_summary,
     log_guardrail_trigger,
@@ -77,3 +81,61 @@ def test_log_guardrail_trigger_emits(caplog: pytest.LogCaptureFixture) -> None:
     assert "50" in caplog.text
     log_guardrail_trigger("live_io_blocked", "LIVE_WRITES_ALLOWED=false")
     assert "live_io_blocked" in caplog.text
+
+
+def test_log_decay_fit_start_returns_float_and_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_start emits event and returns start time."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_decay_fit_start()
+    assert isinstance(t, float)
+    assert "decay_fit_start" in caplog.text
+
+
+def test_log_decay_fit_end_and_written_emit(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_end and log_decay_fit_written emit with counts."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    log_decay_fit_written(3)
+    assert "decay_fit_written" in caplog.text and "3" in caplog.text
+    log_decay_fit_end(params_count=3, duration_seconds=0.1, skipped_low_support=0)
+    assert "decay_fit_end" in caplog.text and "params_count" in caplog.text
+
+
+def test_log_decay_fit_skipped_low_support_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_skipped_low_support emits count."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    log_decay_fit_skipped_low_support(2)
+    assert "decay_fit_skipped_low_support" in caplog.text and "2" in caplog.text
+
+
+def test_log_confidence_penalty_shadow_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """confidence_penalty_shadow start/end/written emit."""
+    from ops.ops_events import (
+        log_confidence_penalty_shadow_end,
+        log_confidence_penalty_shadow_start,
+        log_confidence_penalty_shadow_written,
+    )
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_confidence_penalty_shadow_start()
+    assert isinstance(t, float)
+    assert "confidence_penalty_shadow_start" in caplog.text
+    log_confidence_penalty_shadow_written(5)
+    assert "confidence_penalty_shadow_written" in caplog.text and "5" in caplog.text
+    log_confidence_penalty_shadow_end(5, 0.1)
+    assert "confidence_penalty_shadow_end" in caplog.text and "row_count" in caplog.text
+
+
+def test_log_uncertainty_shadow_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """uncertainty_shadow start/end/written emit."""
+    from ops.ops_events import (
+        log_uncertainty_shadow_end,
+        log_uncertainty_shadow_start,
+        log_uncertainty_shadow_written,
+    )
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_uncertainty_shadow_start()
+    assert isinstance(t, float)
+    assert "uncertainty_shadow_start" in caplog.text
+    log_uncertainty_shadow_written(3)
+    assert "uncertainty_shadow_written" in caplog.text and "3" in caplog.text
+    log_uncertainty_shadow_end(3, 0.05)
+    assert "uncertainty_shadow_end" in caplog.text and "row_count" in caplog.text

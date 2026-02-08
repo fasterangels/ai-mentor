@@ -123,6 +123,19 @@ async def run_shadow_pipeline(
         log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_EVIDENCE_PACK")
         return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack")
 
+    # Optional: ingest recorded evidence items (schema v1) if file exists; does not affect analysis
+    try:
+        from pathlib import Path
+        from ingestion import evidence_ingestion
+        evidence_dir = Path(evidence_ingestion.__file__).resolve().parent / "fixtures" / "evidence_v1"
+        evidence_file = evidence_dir / f"{match_id}.json"
+        if evidence_file.exists():
+            await evidence_ingestion.ingest_evidence_for_fixture(
+                session, match_id, file_path=evidence_file, created_at=now
+            )
+    except Exception:
+        pass
+
     ep_serialized = evidence_pack_to_serializable(evidence_pack)
 
     def _strip_volatile(obj: Any) -> Any:
