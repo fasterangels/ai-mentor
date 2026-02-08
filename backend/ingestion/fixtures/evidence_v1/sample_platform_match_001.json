@@ -1,0 +1,16 @@
+{
+  "fixture_id": "sample_platform_match_001",
+  "items": [
+    {
+      "title": "Key player doubtful",
+      "description": "Midfielder may miss with minor knock.",
+      "evidence_type": "INJURY",
+      "source_class": "RECORDED",
+      "source_name": "recorded_fixture",
+      "reliability_tier": "HIGH",
+      "observed_at": "2025-01-15T10:00:00+00:00",
+      "team_id": "team_home_001",
+      "player_id": "player_001"
+    }
+  ]
+}
