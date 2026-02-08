@@ -12,10 +12,11 @@ import json
 import sys
 from pathlib import Path
 
-# Ensure backend is on path when run from repo root or when pytest collects from backend/tests
+# Backend on path when run from repo root; use relative "backend" when cwd has it (CI/repo root)
 _backend = Path(__file__).resolve().parent.parent.parent
-if _backend.name == "backend" and str(_backend) not in sys.path:
-    sys.path.insert(0, str(_backend))
+_add = "backend" if (Path.cwd() / "backend" / "pipeline").exists() else str(_backend)
+if _add not in sys.path:
+    sys.path.insert(0, _add)
 
 from pipeline.snapshot_envelope import compute_payload_checksum, compute_envelope_checksum
 from replay.late_data.generate import (
