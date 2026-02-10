@@ -15,6 +15,8 @@ from repositories.analysis_run_repo import AnalysisRunRepository
 from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 
+from evaluation.reason_metrics import reason_metrics_for_report
+
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -64,6 +66,7 @@ async def build_evaluation_report(
         for m in MARKETS
     }
     reason_stats: Dict[str, Dict[str, Dict[str, int]]] = {}
+    reason_metrics_decisions: List[tuple] = []  # (market, reason_codes) per decision
 
     for run, res in resolved:
         try:
@@ -122,6 +125,7 @@ async def build_evaluation_report(
             reason_json = {}
         for m in MARKETS:
             codes = reason_json.get(m) or []
+            reason_metrics_decisions.append((m, list(codes)))
             outcome = mo.get(m, "UNRESOLVED")
             for code in codes:
                 if code not in reason_stats:
@@ -184,8 +188,12 @@ async def build_evaluation_report(
                 "success_rate": round(s / (s + f), 4) if (s + f) > 0 else None,
             }
 
-    return {
+    report: Dict[str, Any] = {
         "overall": {"total_snapshots": total_snapshots, "resolved_snapshots": resolved_snapshots},
         "per_market_accuracy": per_market_report,
         "reason_effectiveness": reason_effectiveness,
     }
+    rm_block = reason_metrics_for_report(reason_metrics_decisions)
+    report["reason_metrics"] = rm_block["reason_metrics"]
+    report.setdefault("meta", {})["reason_metrics_version"] = rm_block["meta"]["reason_metrics_version"]
+    return report
