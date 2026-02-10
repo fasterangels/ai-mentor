@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
+from pipeline.report_schema import CANONICAL_FLOW_SHADOW_RUN, REPORT_SCHEMA_VERSION
 from pipeline.shadow_pipeline import run_shadow_pipeline
+from version import get_version as get_app_version
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -29,7 +31,12 @@ async def shadow_run(
     connector_name = (body.get("connector_name") or "dummy").strip()
     match_id = (body.get("match_id") or "").strip()
     if not match_id:
+        from datetime import datetime, timezone
         return {
+            "schema_version": REPORT_SCHEMA_VERSION,
+            "canonical_flow": CANONICAL_FLOW_SHADOW_RUN,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "app_version": get_app_version(),
             "error": "MISSING_MATCH_ID",
             "detail": "match_id is required",
             "ingestion": {},
