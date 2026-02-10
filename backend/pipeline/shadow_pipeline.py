@@ -37,6 +37,12 @@ from analyzer.v2.contracts import ANALYZER_VERSION_V2
 MARKETS_V2 = ["1X2", "OU_2.5", "BTTS"]
 
 
+def _inj_news_shadow_attach_enabled() -> bool:
+    """True if INJ_NEWS_SHADOW_ATTACH_ENABLED is 1/true/yes (default False). Shadow-only; no decision change."""
+    import os
+    return os.environ.get("INJ_NEWS_SHADOW_ATTACH_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+
 def _evidence_pack_to_dict(ep: EvidencePack) -> Dict[str, Any]:
     """Serializable dict for audit snapshots (roundtrip with evidence_pack_from_dict)."""
     return evidence_pack_to_serializable(ep)
@@ -346,6 +352,21 @@ async def run_shadow_pipeline(
             "audits": activation_audits,
         },
     }
+    # Injury news shadow attach (additive report-only; does not change decisions)
+    if _inj_news_shadow_attach_enabled():
+        from injury_shadow.attach import build_injury_news_shadow_summary
+        domains = getattr(evidence_pack, "domains", {}) or {}
+        fixtures = domains.get("fixtures")
+        data = getattr(fixtures, "data", None) if fixtures else None
+        home_team = (data or {}).get("home_team")
+        away_team = (data or {}).get("away_team")
+        team_refs = [x for x in (home_team, away_team) if x is not None and str(x).strip()]
+        injury_summary = await build_injury_news_shadow_summary(
+            session, match_id, team_refs, policy_version="injury_news.v1"
+        )
+        report["injury_news_shadow_summary"] = injury_summary
+    else:
+        report["injury_news_shadow_summary"] = {}
     if dry_run:
         report["dry_run"] = True
     log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start)
@@ -452,6 +473,8 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "evaluation_report_checksum": None,
         "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None},
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
+        "activation": {"activated": False, "reason": None, "audits": []},
+        "injury_news_shadow_summary": {},
         "error": reason,
         "detail": detail,
     }
