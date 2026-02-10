@@ -88,3 +88,52 @@ def test_tuner_proposal_includes_checksum():
     proposal = run_tuner(report)
     assert isinstance(proposal.evaluation_report_checksum, str)
     assert len(proposal.evaluation_report_checksum) == 64  # sha256 hex
+
+
+def test_tuner_constraints_summary_present_and_proposals_bounded():
+    """Tuner returns tuner_constraints_summary; proposals stay within constraint limits and are stable."""
+    from policy.tuner import run_tuner
+    from policy.tuner_constraints import DEFAULT_PER_PARAM_STEP_MAX, DEFAULT_PER_RUN_TOTAL_DELTA_MAX
+
+    report = {
+        "overall": {"total_snapshots": 200, "resolved_snapshots": 200},
+        "per_market_accuracy": {
+            "one_x_two": {
+                "success_count": 10,
+                "failure_count": 30,
+                "neutral_count": 0,
+                "accuracy": 0.25,
+                "confidence_bands": {
+                    "0.55-0.60": {"success_count": 2, "failure_count": 28, "neutral_count": 0, "accuracy": 0.067},
+                },
+            },
+            "over_under_25": {"success_count": 40, "failure_count": 30, "neutral_count": 30, "accuracy": 0.57},
+            "gg_ng": {"success_count": 35, "failure_count": 25, "neutral_count": 40, "accuracy": 0.58},
+        },
+        "reason_effectiveness": {
+            "SOME_REASON": {
+                "one_x_two": {"success": 5, "failure": 40, "neutral": 0, "success_rate": 0.111},
+                "over_under_25": {"success": 3, "failure": 35, "neutral": 0, "success_rate": 0.079},
+                "gg_ng": {"success": 2, "failure": 38, "neutral": 0, "success_rate": 0.05},
+            },
+        },
+    }
+    p1 = run_tuner(report)
+    p2 = run_tuner(report)
+    assert getattr(p1, "tuner_constraints_summary", None) is not None
+    summary = p1.tuner_constraints_summary or {}
+    assert "caps_applied" in summary
+    assert "top_deltas" in summary
+    assert len(summary.get("top_deltas", [])) <= 5
+    for path, old_val, new_val, _ in p1.diffs:
+        try:
+            delta = float(new_val) - float(old_val)
+            assert abs(delta) <= DEFAULT_PER_PARAM_STEP_MAX + 1e-9, f"{path} delta {delta} exceeds step max"
+        except (TypeError, ValueError):
+            pass
+    total_abs = sum(
+        abs(float(n) - float(o)) for _, o, n, _ in p1.diffs
+        if isinstance(o, (int, float)) and isinstance(n, (int, float))
+    )
+    assert total_abs <= DEFAULT_PER_RUN_TOTAL_DELTA_MAX + 1e-9, f"total |delta| {total_abs} exceeds run max"
+    assert p1.diffs == p2.diffs

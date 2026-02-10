@@ -63,6 +63,7 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
     assert report["evaluation_report_checksum"] is not None
     assert "proposal" in report
     assert "proposal_checksum" in report["proposal"]
+    assert "tuner_constraints_summary" in report["proposal"]
     assert "audit" in report
     assert "changed_count" in report["audit"]
     assert "snapshots_checksum" in report["audit"]
