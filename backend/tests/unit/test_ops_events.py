@@ -16,8 +16,12 @@ import pytest
 
 from ops.ops_events import (
     OPS_LOGGER_NAME,
-    log_pipeline_start,
+    log_decay_fit_end,
+    log_decay_fit_skipped_low_support,
+    log_decay_fit_start,
+    log_decay_fit_written,
     log_pipeline_end,
+    log_pipeline_start,
     log_ingestion_source,
     log_evaluation_summary,
     log_guardrail_trigger,
@@ -77,3 +81,27 @@ def test_log_guardrail_trigger_emits(caplog: pytest.LogCaptureFixture) -> None:
     assert "50" in caplog.text
     log_guardrail_trigger("live_io_blocked", "LIVE_WRITES_ALLOWED=false")
     assert "live_io_blocked" in caplog.text
+
+
+def test_log_decay_fit_start_returns_float_and_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_start emits event and returns start time."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    t = log_decay_fit_start()
+    assert isinstance(t, float)
+    assert "decay_fit_start" in caplog.text
+
+
+def test_log_decay_fit_end_and_written_emit(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_end and log_decay_fit_written emit with counts."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    log_decay_fit_written(3)
+    assert "decay_fit_written" in caplog.text and "3" in caplog.text
+    log_decay_fit_end(params_count=3, duration_seconds=0.1, skipped_low_support=0)
+    assert "decay_fit_end" in caplog.text and "params_count" in caplog.text
+
+
+def test_log_decay_fit_skipped_low_support_emits(caplog: pytest.LogCaptureFixture) -> None:
+    """log_decay_fit_skipped_low_support emits count."""
+    caplog.set_level(logging.INFO, logger=OPS_LOGGER_NAME)
+    log_decay_fit_skipped_low_support(2)
+    assert "decay_fit_skipped_low_support" in caplog.text and "2" in caplog.text

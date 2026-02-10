@@ -34,6 +34,10 @@ class LiveIOCircuitOpenError(Exception):
     """Raised when the circuit breaker is open and the request is skipped."""
 
 
+class LiveIODisabledError(Exception):
+    """Raised when live IO or snapshot writes are disabled (harness/stub fail-fast)."""
+
+
 # --- Circuit breaker (deterministic, no randomness) ---
 _circuit_state: str = "closed"  # closed | open | half_open
 _circuit_failures: int = 0
@@ -178,6 +182,11 @@ def live_io_allowed() -> bool:
 def live_writes_allowed() -> bool:
     """True if live writes (e.g. persist, cache) are allowed. Default: False (read-only default)."""
     return os.environ.get("LIVE_WRITES_ALLOWED", "").strip().lower() in ("1", "true", "yes")
+
+
+def snapshot_writes_allowed() -> bool:
+    """True if writing snapshots to reports/snapshots/ is allowed. Default: False."""
+    return os.environ.get("SNAPSHOT_WRITES_ALLOWED", "").strip().lower() in ("1", "true", "yes")
 
 
 def _real_provider_live_requested() -> bool:
