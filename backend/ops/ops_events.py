@@ -306,3 +306,135 @@ def log_go_no_go_end(decision: str, duration_seconds: float) -> None:
 def log_go_no_go_written(json_path: str, md_path: str) -> None:
     """Emitted when go_no_go_decision.json and go_no_go_decision.md are written."""
     _event("go_no_go_written", json_path=json_path, md_path=md_path)
+
+
+def log_worst_case_start(reports_path: str) -> float:
+    """Log worst-case tracking start; return start time for duration."""
+    _event("worst_case_start", reports_path=reports_path)
+    return time.perf_counter()
+
+
+def log_worst_case_end(
+    reports_path: str,
+    duration_seconds: float,
+    decisions_count: int = 0,
+    rows_written: int = 0,
+) -> None:
+    """Log worst-case tracking end with counts and duration."""
+    _event(
+        "worst_case_end",
+        reports_path=reports_path,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+        rows_written=rows_written,
+    )
+
+
+def log_worst_case_missing_inputs(detail: str) -> None:
+    """Emitted when worst-case run has no resolved evaluation data."""
+    _event("worst_case_missing_inputs", detail=detail)
+
+
+def log_worst_case_written(csv_path: str, json_path: str, rows_written: int) -> None:
+    """Emitted when worst_case_errors_top.csv and .json are written."""
+    _event("worst_case_written", csv_path=csv_path, json_path=json_path, rows_written=rows_written)
+
+
+def log_refusal_opt_start(reports_dir: str) -> float:
+    """Log refusal-optimize-shadow start; return start time for duration."""
+    _event("refusal_opt_start", reports_dir=reports_dir)
+    return time.perf_counter()
+
+
+def log_refusal_opt_end(
+    reports_dir: str,
+    duration_seconds: float,
+    decisions_count: int = 0,
+) -> None:
+    """Log refusal-optimize-shadow end with duration and count."""
+    _event(
+        "refusal_opt_end",
+        reports_dir=reports_dir,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+    )
+
+
+def log_refusal_opt_missing_inputs(detail: str) -> None:
+    """Emitted when refusal-optimize run has no input decisions."""
+    _event("refusal_opt_missing_inputs", detail=detail)
+
+
+def log_refusal_opt_written(artifact_paths: list) -> None:
+    """Emitted when refusal optimization artifacts are written."""
+    _event("refusal_opt_written", artifact_paths=artifact_paths)
+
+
+def log_decay_fit_start() -> float:
+    """Log decay fit run start; return start time for duration."""
+    _event("decay_fit_start")
+    return time.perf_counter()
+
+
+def log_decay_fit_end(
+    params_count: int,
+    duration_seconds: float,
+    skipped_low_support: int = 0,
+) -> None:
+    """Log decay fit run end with counts and duration."""
+    _event(
+        "decay_fit_end",
+        params_count=params_count,
+        duration_seconds=round(duration_seconds, 4),
+        skipped_low_support=skipped_low_support,
+    )
+
+
+def log_decay_fit_skipped_low_support(count: int) -> None:
+    """Emitted when bands have support below MIN_SUPPORT and are skipped."""
+    _event("decay_fit_skipped_low_support", count=count)
+
+
+def log_decay_fit_written(count: int) -> None:
+    """Emitted when decay params artifacts are written."""
+    _event("decay_fit_written", count=count)
+
+
+def log_confidence_penalty_shadow_start() -> float:
+    """Log confidence penalty shadow run start; return start time for duration."""
+    _event("confidence_penalty_shadow_start")
+    return time.perf_counter()
+
+
+def log_confidence_penalty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log confidence penalty shadow run end with count and duration."""
+    _event(
+        "confidence_penalty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_confidence_penalty_shadow_written(row_count: int) -> None:
+    """Emitted when confidence_penalty_shadow.csv and .json are written."""
+    _event("confidence_penalty_shadow_written", row_count=row_count)
+
+
+def log_uncertainty_shadow_start() -> float:
+    """Log uncertainty shadow run start; return start time for duration."""
+    _event("uncertainty_shadow_start")
+    return time.perf_counter()
+
+
+def log_uncertainty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log uncertainty shadow run end with count and duration."""
+    _event(
+        "uncertainty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_uncertainty_shadow_written(row_count: int) -> None:
+    """Emitted when uncertainty_shadow.csv and .json are written."""
+    _event("uncertainty_shadow_written", row_count=row_count)

@@ -26,6 +26,8 @@ if _BACKEND.is_dir() and str(_BACKEND) not in sys.path:
 
 from core.config import get_settings
 from core.database import init_database, dispose_database
+from analyzer.v2.contracts import ANALYZER_VERSION_V2
+from evaluation.baseline import build_baseline_run, default_schema_versions
 from evaluation.attribution import (
     emit_attribution_rows,
     market_outcomes_from_resolution,
@@ -197,7 +199,23 @@ async def run_evaluator(
                         "success_rate": round(s / (s + f), 4) if (s + f) > 0 else None,
                     }
 
+            # Baseline immutability metadata (read-only instrumentation)
+            from policy.policy_runtime import get_active_policy
+
+            active_policy = get_active_policy()
+            policy_payload = active_policy.model_dump(mode="json")
+            schema_versions = default_schema_versions()
+            baseline = build_baseline_run(ANALYZER_VERSION_V2, policy_payload, schema_versions)
+
             report = {
+                "meta": {
+                    "baseline": {
+                        "analyzer_version": baseline.analyzer_version,
+                        "policy_digest": baseline.policy_digest,
+                        "schema_versions": baseline.schema_versions,
+                        "baseline_hash": baseline.baseline_hash,
+                    },
+                },
                 "overall": {
                     "total_snapshots": total_snapshots,
                     "resolved_snapshots": resolved_snapshots,
@@ -211,7 +229,24 @@ async def run_evaluator(
             print(f"Wrote {output_path}", file=sys.stderr)
     except Exception as e:
         if "no such table" in str(e).lower() or "OperationalError" in type(e).__name__:
+            # Even for empty / schema-missing DBs, emit baseline metadata so that
+            # identical environments produce identical baseline hashes.
+            from policy.policy_runtime import get_active_policy
+
+            active_policy = get_active_policy()
+            policy_payload = active_policy.model_dump(mode="json")
+            schema_versions = default_schema_versions()
+            baseline = build_baseline_run(ANALYZER_VERSION_V2, policy_payload, schema_versions)
+
             report = {
+                "meta": {
+                    "baseline": {
+                        "analyzer_version": baseline.analyzer_version,
+                        "policy_digest": baseline.policy_digest,
+                        "schema_versions": baseline.schema_versions,
+                        "baseline_hash": baseline.baseline_hash,
+                    },
+                },
                 "overall": {"total_snapshots": 0, "resolved_snapshots": 0},
                 "per_market_accuracy": {},
                 "reason_effectiveness": {},

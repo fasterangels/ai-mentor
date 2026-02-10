@@ -9,6 +9,7 @@ from .run import (
     MARKETS,
     StalenessRow,
     _aggregate_staleness_rows,
+    _load_evaluation_data_with_evidence_age,
     run_staleness_evaluation,
 )
 
@@ -16,5 +17,6 @@ __all__ = [
     "MARKETS",
     "StalenessRow",
     "_aggregate_staleness_rows",
+    "_load_evaluation_data_with_evidence_age",
     "run_staleness_evaluation",
 ]

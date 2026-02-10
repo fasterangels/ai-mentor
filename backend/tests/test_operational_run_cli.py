@@ -26,6 +26,7 @@ def _run_operational_cli(
     now_utc: str | None = "2025-06-01T12:00:00+00:00",
 ) -> tuple[int, str, str]:
     """Run tools/operational_run.py; return (returncode, stdout, stderr)."""
+    backend_dir = _repo_root / "backend"
     cmd = [
         sys.executable,
         str(_repo_root / "tools" / "operational_run.py"),
@@ -38,7 +39,11 @@ def _run_operational_cli(
     ]
     if match_ids:
         cmd.extend(["--match-ids", match_ids])
-    env = {**__import__("os").environ, "DATABASE_URL": "sqlite+aiosqlite:///:memory:"}
+    env = {
+        **__import__("os").environ,
+        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "PYTHONPATH": str(backend_dir),
+    }
     result = subprocess.run(
         cmd,
         cwd=str(_repo_root),
