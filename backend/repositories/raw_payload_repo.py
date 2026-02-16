@@ -50,3 +50,10 @@ class RawPayloadRepository(BaseRepository[RawPayload]):
         stmt = select(RawPayload).where(RawPayload.payload_hash == payload_hash)
         result = await self.session.execute(stmt)
         return result.first() is not None
+
+    async def get_by_hash(self, payload_hash: str) -> Optional[RawPayload]:
+        """Return first RawPayload with this payload_hash or None."""
+        stmt = select(RawPayload).where(RawPayload.payload_hash == payload_hash).limit(1)
+        result = await self.session.execute(stmt)
+        row = result.scalars().first()
+        return row
