@@ -22,6 +22,7 @@ from evaluation.reason_reliability import compute_reason_reliability
 from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
 from evaluation.decision_engine_eval import evaluate_decision_engine_with_policy
 from evaluation.refusal_tradeoff import TradeoffConfig, compute_tradeoff, extract_rows_for_tradeoff
+from backend.audit.system_audit import AuditConfig, generate_audit
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -304,5 +305,10 @@ async def build_evaluation_report(
         tradeoff_block = {"version": "v0", "global": {"points": []}, "per_market": {}}
     report["refusal_tradeoff_metrics"] = tradeoff_block
     report.setdefault("meta", {})["refusal_tradeoff_version"] = tradeoff_block.get("version", "v0")
+
+    # System self-audit summary and red flags (shadow-only).
+    audit = generate_audit(report, AuditConfig())
+    report["system_audit"] = audit
+    report.setdefault("meta", {})["system_audit_version"] = audit.get("version", "v0")
 
     return report
