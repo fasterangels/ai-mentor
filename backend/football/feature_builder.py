@@ -6,6 +6,7 @@ from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
 from .injury_impact import build_injury_impact
 from .lineup_strength import build_lineup_strength
+from .live_stats import build_live_stats
 from .market_movement import update_and_analyze
 from .odds_intelligence import build_odds_intelligence
 from .prediction_model import build_prediction
@@ -21,6 +22,7 @@ def build_features(
     *,
     last_n: int = 6,
     h2h_n: int = 6,
+    live_data: dict | None = None,
 ) -> FootballFeatures:
     """
     Build football features for a single match using the given providers.
@@ -91,6 +93,9 @@ def build_features(
             "direction": movement.direction,
         },
     }
+    if live_data is not None:
+        live_stats = build_live_stats(live_data)
+        meta["live_stats"] = live_stats.__dict__
     payload_dict = {"meta": meta}
     prediction = build_prediction(payload_dict)
     meta["model_prediction"] = prediction.__dict__
@@ -113,6 +118,7 @@ def build_features_payload(
     *,
     last_n: int = 6,
     h2h_n: int = 6,
+    live_data: dict | None = None,
 ) -> dict[str, Any]:
     """
     Build football features and return them as a plain dict payload.
@@ -123,6 +129,7 @@ def build_features_payload(
         odds=odds,
         last_n=last_n,
         h2h_n=h2h_n,
+        live_data=live_data,
     )
     return asdict_deep(features)
 
