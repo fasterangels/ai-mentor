@@ -53,7 +53,7 @@ jobs:
         if: always()
         run: |
           latest=$(ls -t reports/system_audit/system_audit_*.json 2>/dev/null | head -n 1 || echo "")
-          if [ -z "$latest\" ]; then
+          if [ -z "$latest" ]; then
             echo "## System Audit" >> "$GITHUB_STEP_SUMMARY"
             echo "No system audit report found." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -68,9 +68,14 @@ overall = sa.get("overall_status") or "UNKNOWN"
 baseline_hash = sa.get("baseline_hash") or ""
 
 det = (sa.get("determinism_check") or {}).get("status")
-eval_status = (sa.get("evaluation_metrics_present") or {}).get("status")
+eval_block = sa.get("evaluation_metrics_present") or {}
+eval_status = eval_block.get("status")
 artifact_status = (sa.get("artifact_integrity") or {}).get("status")
 metrics_status = (sa.get("metrics_sanity") or {}).get("status")
+
+has_rm = eval_block.get("has_reason_metrics")
+has_rfm = eval_block.get("has_reason_failure_metrics")
+has_et = eval_block.get("has_error_taxonomy")
 
 lines = []
 lines.append("## System Audit")
@@ -82,6 +87,9 @@ if baseline_hash:
 lines.append("- Checks:")
 lines.append(f"  - Determinism: **{det}**")
 lines.append(f"  - Evaluation metrics: **{eval_status}**")
+lines.append(f"    - reason_metrics present: **{bool(has_rm)}**")
+lines.append(f"    - reason_failure_metrics present: **{bool(has_rfm)}**")
+lines.append(f"    - error_taxonomy present: **{bool(has_et)}**")
 lines.append(f"  - Artifact integrity: **{artifact_status}**")
 lines.append(f"  - Metrics sanity: **{metrics_status}**")
 

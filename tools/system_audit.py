@@ -115,16 +115,23 @@ def _run_offline_evaluator(report_path: Path) -> Dict[str, Any]:
 
 
 def _audit_evaluation_metrics(report: Dict[str, Any]) -> Dict[str, Any]:
-    """Check presence of reason_metrics, reason_failure_metrics, and baseline metadata."""
+    """Check presence of reason_metrics, reason_failure_metrics, error_taxonomy, and baseline metadata."""
     status = "PASS"
     reasons: List[str] = []
 
-    if "reason_metrics" not in report:
+    has_reason_metrics = "reason_metrics" in report
+    has_reason_failure_metrics = "reason_failure_metrics" in report
+    has_error_taxonomy = "error_taxonomy" in report
+
+    if not has_reason_metrics:
         status = "FAIL"
         reasons.append("reason_metrics missing")
-    if "reason_failure_metrics" not in report:
+    if not has_reason_failure_metrics:
         status = "FAIL"
         reasons.append("reason_failure_metrics missing")
+    if not has_error_taxonomy:
+        status = "FAIL"
+        reasons.append("error_taxonomy missing")
 
     meta = report.get("meta") or {}
     baseline = meta.get("baseline") or {}
@@ -134,7 +141,13 @@ def _audit_evaluation_metrics(report: Dict[str, Any]) -> Dict[str, Any]:
         status = "FAIL"
         reasons.append(f"baseline meta missing keys: {', '.join(missing_baseline)}")
 
-    return {"status": status, "details": "; ".join(reasons) if reasons else "OK"}
+    return {
+        "status": status,
+        "details": "; ".join(reasons) if reasons else "OK",
+        "has_reason_metrics": has_reason_metrics,
+        "has_reason_failure_metrics": has_reason_failure_metrics,
+        "has_error_taxonomy": has_error_taxonomy,
+    }
 
 
 def _audit_artifact_integrity(report_path: Path, out_dir: Path) -> Dict[str, Any]:
