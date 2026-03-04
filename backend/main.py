@@ -170,3 +170,20 @@ def team_matches(req: dict) -> dict:
     matches = find_matches_by_team(team, fixtures)
     return {"matches": [m.__dict__ for m in matches]}
 
+
+@app.post("/football/analyze_match")
+def analyze_match(req: dict) -> dict:
+    """Run full pipeline for a match query and return match + analysis. Uses mock fixtures and configured providers."""
+    query = req.get("query") or ""
+    fixtures = get_mock_fixtures()
+    match = find_match_by_teams(query, fixtures)
+    if not match:
+        return {"error": "match_not_found"}
+    payload = build_features_payload(
+        match.match_id, stats_provider, odds_provider, last_n=6, h2h_n=6
+    )
+    return {
+        "match": match.__dict__,
+        "analysis": payload,
+    }
+
