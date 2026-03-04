@@ -20,7 +20,7 @@ from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
 from evaluation.error_taxonomy import error_taxonomy_for_report
 from evaluation.reason_reliability import compute_reason_reliability
 from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
-from evaluation.decision_engine_eval import evaluate_decision_engine
+from evaluation.decision_engine_eval import evaluate_decision_engine_with_policy
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -282,11 +282,12 @@ async def build_evaluation_report(
         "per_market": rr_per_market,
     }
 
-    de_metrics = evaluate_decision_engine(
+    de_metrics, policy_version = evaluate_decision_engine_with_policy(
         decision_engine_predictions,
         reason_reliability_for_engine,
     )
     report["decision_engine_metrics"] = de_metrics
     report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
+    report.setdefault("meta", {})["decision_policy_version"] = policy_version
 
     return report

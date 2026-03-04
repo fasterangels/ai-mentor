@@ -7,11 +7,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_backend = Path(__file__).resolve().parent.parent
-if str(_backend) not in sys.path:
-    sys.path.insert(0, str(_backend))
+_repo_root = Path(__file__).resolve().parents[2]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
-from evaluation.decision_engine_eval import (  # type: ignore[import-error]
+from backend.evaluation.decision_engine_eval import (  # type: ignore[import-error]
     build_reliability_table_from_reason_reliability,
     evaluate_decision_engine,
 )

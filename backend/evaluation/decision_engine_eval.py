@@ -16,6 +16,7 @@ from backend.decision_engine.decision_engine import (
     DecisionInput,
     decide,
 )
+from backend.policies.decision_engine_policy import load_policy
 
 
 def build_reliability_table_from_reason_reliability(
@@ -214,4 +215,29 @@ def evaluate_decision_engine(
         "per_market": per_market_out,
         "examples": example_entries,
     }
+
+
+def evaluate_decision_engine_with_policy(
+    predictions: List[Dict[str, Any]],
+    reason_reliability: Dict[str, Any],
+    policy_path: Optional[str] = None,
+) -> Tuple[Dict[str, Any], str]:
+    """
+    Convenience wrapper that loads a versioned policy and evaluates the engine.
+
+    Returns a tuple of (metrics, policy_version).
+    """
+    if policy_path is None:
+        # Resolve the default policy file relative to the repository root.
+        base_dir = Path(__file__).resolve().parents[2]
+        policy_path = str(base_dir / "backend" / "policies" / "decision_engine_policy.json")
+
+    policy = load_policy(policy_path)
+    metrics = evaluate_decision_engine(
+        predictions,
+        reason_reliability,
+        thresholds=policy.thresholds,
+    )
+    return metrics, policy.version
+
 
