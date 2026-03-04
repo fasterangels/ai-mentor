@@ -10,6 +10,12 @@ from routes.api_v1 import api_v1_router
 from sources.base import FetchRequest
 from sources.cache import load_cache, save_cache
 from sources.registry import get_source, list_sources
+from football.feature_builder import build_features_payload
+from football.mock_providers import MockFootballOddsProvider, MockFootballStatsProvider
+
+# Football feature builder: mock providers (no external API calls).
+stats_provider = MockFootballStatsProvider()
+odds_provider = MockFootballOddsProvider()
 
 
 # Block 1 skeleton + Block 8.1 API wiring.
@@ -93,4 +99,23 @@ def fetch(req: dict) -> dict:
         "cached": False,
         "payload": result.payload,
     }
+
+
+@app.get("/football/demo_match")
+def football_demo_match() -> dict:
+    """Return aggregated football features for demo_match (deterministic, mock providers)."""
+    return build_features_payload(
+        "demo_match", stats_provider, odds_provider, last_n=6, h2h_n=6
+    )
+
+
+@app.post("/football/features")
+def football_features(req: dict) -> dict:
+    """Build and return football features for the given match_id. Uses mock providers."""
+    match_id = (req.get("match_id") or "").strip()
+    if not match_id:
+        return {"error": "missing_match_id"}
+    return build_features_payload(
+        match_id, stats_provider, odds_provider, last_n=6, h2h_n=6
+    )
 
