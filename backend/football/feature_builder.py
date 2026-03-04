@@ -4,6 +4,7 @@ from typing import Any
 
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
+from .odds_intelligence import build_odds_intelligence
 from .team_intelligence import build_team_intelligence
 
 
@@ -36,6 +37,7 @@ def build_features(
 
     h2h = stats.get_h2h(match.home.team_id, match.away.team_id, n=h2h_n)
     odds_quotes = odds.get_odds(match_id)
+    odds_intel = build_odds_intelligence(odds_quotes)
 
     meta = {
         "stats_provider": getattr(stats, "name", type(stats).__name__),
@@ -50,6 +52,7 @@ def build_features(
             "home": home_intel.__dict__,
             "away": away_intel.__dict__,
         },
+        "odds_intelligence": odds_intel.__dict__,
     }
 
     return FootballFeatures(
