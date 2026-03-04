@@ -7,6 +7,7 @@ from .providers import FootballOddsProvider, FootballStatsProvider
 from .injury_impact import build_injury_impact
 from .lineup_strength import build_lineup_strength
 from .live_momentum import build_live_momentum
+from .live_probability import update_live_probability
 from .live_stats import build_live_stats
 from .market_movement import update_and_analyze
 from .odds_intelligence import build_odds_intelligence
@@ -102,6 +103,13 @@ def build_features(
     payload_dict = {"meta": meta}
     prediction = build_prediction(payload_dict)
     meta["model_prediction"] = prediction.__dict__
+    if live_data is not None:
+        live_probs = update_live_probability(
+            meta["model_prediction"],
+            meta["live_momentum"],
+            meta["live_stats"],
+        )
+        meta["live_probability"] = live_probs.__dict__
 
     return FootballFeatures(
         match=match,
