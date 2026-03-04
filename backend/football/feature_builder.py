@@ -4,6 +4,7 @@ from typing import Any
 
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
+from .confidence_calibration import apply_calibration, build_calibration_bins, load_records
 from .historical_learning import store_prediction
 from .injury_impact import build_injury_impact
 from .lineup_strength import build_lineup_strength
@@ -105,6 +106,11 @@ def build_features(
     prediction = build_prediction(payload_dict)
     meta["model_prediction"] = prediction.__dict__
     store_prediction(match_id, meta["model_prediction"])
+    records = load_records()
+    if len(records) > 20:
+        bins = build_calibration_bins(records)
+        calibrated = apply_calibration(meta["model_prediction"], bins)
+        meta["calibrated_prediction"] = calibrated
     if live_data is not None:
         live_probs = update_live_probability(
             meta["model_prediction"],
