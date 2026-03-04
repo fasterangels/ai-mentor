@@ -77,3 +77,34 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_refusal_opt_start(reports_dir: str) -> None:
+    """Log refusal optimization run start."""
+    _event("refusal_opt_start", reports_dir=reports_dir)
+
+
+def log_refusal_opt_end(
+    reports_dir: str,
+    duration_seconds: float,
+    decisions_count: int,
+    artifacts_written: int,
+) -> None:
+    """Log refusal optimization run end."""
+    _event(
+        "refusal_opt_end",
+        reports_dir=reports_dir,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+        artifacts_written=artifacts_written,
+    )
+
+
+def log_refusal_opt_written(artifact_paths: list) -> None:
+    """Log refusal optimization artifacts written."""
+    _event("refusal_opt_written", artifact_paths=artifact_paths)
+
+
+def log_refusal_opt_missing_inputs(detail: str) -> None:
+    """Log when uncertainty-shadow or evaluation inputs are missing."""
+    _event("refusal_opt_missing_inputs", detail=detail)

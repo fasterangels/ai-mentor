@@ -34,6 +34,10 @@ class LiveIOCircuitOpenError(Exception):
     """Raised when the circuit breaker is open and the request is skipped."""
 
 
+class LiveIODisabledError(Exception):
+    """Raised when live IO or snapshot writes are disabled by configuration (e.g. LIVE_IO_ALLOWED, SNAPSHOT_WRITES_ALLOWED)."""
+
+
 # --- Circuit breaker (deterministic, no randomness) ---
 _circuit_state: str = "closed"  # closed | open | half_open
 _circuit_failures: int = 0
