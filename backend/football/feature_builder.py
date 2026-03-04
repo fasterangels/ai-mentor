@@ -4,6 +4,7 @@ from typing import Any
 
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
+from .injury_impact import build_injury_impact
 from .odds_intelligence import build_odds_intelligence
 from .prediction_model import build_prediction
 from .tactical_signals import build_tactical_signals
@@ -34,6 +35,8 @@ def build_features(
 
     home_team_id = match.home.team_id
     away_team_id = match.away.team_id
+    home_injury = build_injury_impact(home_team_id, injuries)
+    away_injury = build_injury_impact(away_team_id, injuries)
     home_intel = build_team_intelligence(home_team_id, last6.get(home_team_id, []))
     away_intel = build_team_intelligence(away_team_id, last6.get(away_team_id, []))
 
@@ -57,6 +60,10 @@ def build_features(
         "team_intelligence": {
             "home": home_intel.__dict__,
             "away": away_intel.__dict__,
+        },
+        "injury_impact": {
+            "home": home_injury.__dict__,
+            "away": away_injury.__dict__,
         },
         "odds_intelligence": odds_intel.__dict__,
         "tactical_signals": tactical.__dict__,
