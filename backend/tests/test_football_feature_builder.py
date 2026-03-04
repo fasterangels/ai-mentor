@@ -60,5 +60,20 @@ def test_build_features_payload_is_deterministic() -> None:
     odds = MockFootballOddsProvider()
     p1 = build_features_payload("MATCH_DETERMINISTIC", stats, odds)
     p2 = build_features_payload("MATCH_DETERMINISTIC", stats, odds)
-    assert p1 == p2
+    for key in ["match", "lineups", "injuries", "last6", "h2h", "odds", "meta"]:
+        assert key in p1
+        assert key in p2
+    assert p1["match"] == p2["match"]
+    assert p1["lineups"] == p2["lineups"]
+    assert p1["injuries"] == p2["injuries"]
+    assert p1["last6"] == p2["last6"]
+    assert p1["h2h"] == p2["h2h"]
+    assert p1["odds"] == p2["odds"]
+    assert "team_intelligence" in p1["meta"]
+    assert "odds_intelligence" in p1["meta"]
+    assert p1["meta"]["team_intelligence"] == p2["meta"]["team_intelligence"]
+    assert p1["meta"]["odds_intelligence"] == p2["meta"]["odds_intelligence"]
+    # market_movement may differ between calls (snapshot history)
+    _ = p1["meta"].get("market_movement")
+    _ = p2["meta"].get("market_movement")
 

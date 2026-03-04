@@ -29,6 +29,11 @@ def test_get_demo_match_returns_required_keys() -> None:
     data = resp.json()
     for key in REQUIRED_KEYS:
         assert key in data
+    assert "meta" in data
+    assert "team_intelligence" in data["meta"]
+    assert "odds_intelligence" in data["meta"]
+    # market_movement is optional (present when feature is enabled)
+    _ = data["meta"].get("market_movement")
 
 
 def test_post_football_features_with_match_id() -> None:
@@ -39,6 +44,9 @@ def test_post_football_features_with_match_id() -> None:
     for key in REQUIRED_KEYS:
         assert key in data
     assert data["match"].get("match_id") == "X" or data["match"].get("league") == "DEMO"
+    assert "team_intelligence" in data["meta"]
+    assert "odds_intelligence" in data["meta"]
+    _ = data["meta"].get("market_movement")
 
 
 def test_post_football_features_missing_match_id() -> None:
@@ -66,9 +74,28 @@ def test_last6_has_two_teams_each_list_max_six() -> None:
 
 
 def test_demo_match_deterministic() -> None:
-    """Calling GET /football/demo_match twice yields identical JSON."""
+    """Calling GET /football/demo_match twice yields same required keys and deterministic data; market_movement may differ."""
     resp1 = client.get("/football/demo_match")
     resp2 = client.get("/football/demo_match")
     assert resp1.status_code == 200
     assert resp2.status_code == 200
-    assert resp1.json() == resp2.json()
+    data1 = resp1.json()
+    data2 = resp2.json()
+    for key in REQUIRED_KEYS:
+        assert key in data1
+        assert key in data2
+    assert data1["match"] == data2["match"]
+    assert data1["lineups"] == data2["lineups"]
+    assert data1["injuries"] == data2["injuries"]
+    assert data1["last6"] == data2["last6"]
+    assert data1["h2h"] == data2["h2h"]
+    assert data1["odds"] == data2["odds"]
+    assert "team_intelligence" in data1["meta"]
+    assert "odds_intelligence" in data1["meta"]
+    assert "team_intelligence" in data2["meta"]
+    assert "odds_intelligence" in data2["meta"]
+    assert data1["meta"]["team_intelligence"] == data2["meta"]["team_intelligence"]
+    assert data1["meta"]["odds_intelligence"] == data2["meta"]["odds_intelligence"]
+    # market_movement may differ (second call has history)
+    _ = data1["meta"].get("market_movement")
+    _ = data2["meta"].get("market_movement")
