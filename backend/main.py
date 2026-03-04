@@ -7,6 +7,9 @@ from core.config import get_settings
 from core.database import init_database, dispose_database
 from core.logging import setup_logging
 from routes.api_v1 import api_v1_router
+from sources.base import FetchRequest
+from sources.cache import load_cache, save_cache
+from sources.registry import get_source, list_sources
 
 
 # Block 1 skeleton + Block 8.1 API wiring.
@@ -56,4 +59,38 @@ async def on_shutdown() -> None:
 async def health() -> dict:
     """Simple health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/sources")
+def sources() -> dict:
+    """List registered data source names."""
+    return {"sources": list_sources()}
+
+
+@app.post("/fetch")
+def fetch(req: dict) -> dict:
+    """Fetch data from a source for a market; uses cache when valid."""
+    source = req.get("source")
+    market = req.get("market")
+
+    cached = load_cache(source, market)
+
+    if cached:
+        return {
+            "source": source,
+            "market": market,
+            "cached": True,
+            "payload": cached,
+        }
+
+    s = get_source(source)
+    result = s.fetch(FetchRequest(source=source, market=market))
+    save_cache(source, market, result.payload)
+
+    return {
+        "source": source,
+        "market": market,
+        "cached": False,
+        "payload": result.payload,
+    }
 
