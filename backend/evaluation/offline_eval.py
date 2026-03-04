@@ -21,6 +21,7 @@ from evaluation.error_taxonomy import error_taxonomy_for_report
 from evaluation.reason_reliability import compute_reason_reliability
 from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
 from evaluation.decision_engine_eval import evaluate_decision_engine_with_policy
+from evaluation.refusal_tradeoff import TradeoffConfig, compute_tradeoff, extract_rows_for_tradeoff
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -293,5 +294,15 @@ async def build_evaluation_report(
     report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
     report.setdefault("meta", {})["decision_policy_version"] = policy_version
     report.setdefault("meta", {})["calibrator_version"] = calibrator_version
+
+    # Refusal tradeoff metrics (coverage/precision/F1 curves) based on decision engine outputs.
+    tradeoff_rows = extract_rows_for_tradeoff(report)
+    if tradeoff_rows:
+        tradeoff_cfg = TradeoffConfig()
+        tradeoff_block = compute_tradeoff(tradeoff_rows, tradeoff_cfg)
+    else:
+        tradeoff_block = {"version": "v0", "global": {"points": []}, "per_market": {}}
+    report["refusal_tradeoff_metrics"] = tradeoff_block
+    report.setdefault("meta", {})["refusal_tradeoff_version"] = tradeoff_block.get("version", "v0")
 
     return report
