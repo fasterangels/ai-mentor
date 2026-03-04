@@ -4,6 +4,7 @@ from typing import Any
 
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
+from .team_intelligence import build_team_intelligence
 
 
 def build_features(
@@ -28,6 +29,11 @@ def build_features(
         match.away.team_id: away_last[:last_n],
     }
 
+    home_team_id = match.home.team_id
+    away_team_id = match.away.team_id
+    home_intel = build_team_intelligence(home_team_id, last6.get(home_team_id, []))
+    away_intel = build_team_intelligence(away_team_id, last6.get(away_team_id, []))
+
     h2h = stats.get_h2h(match.home.team_id, match.away.team_id, n=h2h_n)
     odds_quotes = odds.get_odds(match_id)
 
@@ -40,6 +46,10 @@ def build_features(
         "h2h_n": h2h_n,
         "h2h_count": len(h2h),
         "odds_count": len(odds_quotes),
+        "team_intelligence": {
+            "home": home_intel.__dict__,
+            "away": away_intel.__dict__,
+        },
     }
 
     return FootballFeatures(
