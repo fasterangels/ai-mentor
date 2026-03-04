@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,10 +13,23 @@ from sources.cache import load_cache, save_cache
 from sources.registry import get_source, list_sources
 from football.feature_builder import build_features_payload
 from football.mock_providers import MockFootballOddsProvider, MockFootballStatsProvider
+from football.http_providers import HttpJsonFootballOddsProvider, HttpJsonFootballStatsProvider
 
-# Football feature builder: mock providers (no external API calls).
-stats_provider = MockFootballStatsProvider()
-odds_provider = MockFootballOddsProvider()
+# Football feature builder: real HTTP providers if both BASE_URLs set, else mocks.
+_stats_base = os.environ.get("FOOTBALL_STATS_BASE_URL", "").strip()
+_odds_base = os.environ.get("FOOTBALL_ODDS_BASE_URL", "").strip()
+if _stats_base and _odds_base:
+    stats_provider = HttpJsonFootballStatsProvider(
+        _stats_base,
+        api_key=os.environ.get("FOOTBALL_STATS_API_KEY") or None,
+    )
+    odds_provider = HttpJsonFootballOddsProvider(
+        _odds_base,
+        api_key=os.environ.get("FOOTBALL_ODDS_API_KEY") or None,
+    )
+else:
+    stats_provider = MockFootballStatsProvider()
+    odds_provider = MockFootballOddsProvider()
 
 
 # Block 1 skeleton + Block 8.1 API wiring.
@@ -64,7 +78,11 @@ async def on_shutdown() -> None:
 @app.get("/health")
 async def health() -> dict:
     """Simple health check endpoint."""
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "football_stats_provider": getattr(stats_provider, "name", "unknown"),
+        "football_odds_provider": getattr(odds_provider, "name", "unknown"),
+    }
 
 
 @app.get("/sources")
