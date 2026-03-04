@@ -9,6 +9,7 @@ from backend.decision_engine.decision_engine import (
     decide,
 )
 from backend.policies.decision_engine_policy import load_policy
+from backend.runtime.decision_bundle import load_bundle
 
 
 def run_decision_engine_runtime(prediction: Dict[str, Any], reason_reliability: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
@@ -24,8 +25,10 @@ def run_decision_engine_runtime(prediction: Dict[str, Any], reason_reliability: 
     reason_reliability: reliability_table shaped as:
       {market: {reason_code: reliability_float}}
     """
-    policy = load_policy("backend/policies/decision_engine_policy.json")
-    calibrator = load_calibrator("backend/calibration/confidence_calibrator.json")
+    bundle = load_bundle("backend/runtime/decision_bundle.json")
+    policy = load_policy(bundle.policy_path)
+    calibrator = load_calibrator(bundle.calibrator_path)
+    window = bundle.reliability_window
 
     market = prediction.get("market", "default")
     confidence = prediction.get("confidence", 0.0)
@@ -44,8 +47,8 @@ def run_decision_engine_runtime(prediction: Dict[str, Any], reason_reliability: 
     artifacts = DecisionArtifacts(
         reliability_table=reason_reliability,
         thresholds=policy.thresholds,
-        window="90d",
-        version=policy.version,
+        window=window,
+        version=bundle.version,
     )
 
     result = decide(inp, artifacts, calibrator=calibrator)
@@ -55,6 +58,7 @@ def run_decision_engine_runtime(prediction: Dict[str, Any], reason_reliability: 
         "score": result.score,
         "confidence_calibrated": result.conf_cal,
         "flags": list(result.flags),
+        "bundle_version": bundle.version,
     }
 
 

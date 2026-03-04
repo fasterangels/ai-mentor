@@ -39,6 +39,9 @@ def test_high_confidence_and_reliable_reasons_go() -> None:
     result = run_decision_engine_runtime(prediction, _reliability_table())
     assert result["decision"] == "GO"
     assert "low_confidence" not in result["flags"]
+    # Bundle version should be present and non-empty
+    assert isinstance(result.get("bundle_version"), str)
+    assert result["bundle_version"]
 
 
 def test_low_confidence_results_in_no_go() -> None:
