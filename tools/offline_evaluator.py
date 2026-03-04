@@ -33,6 +33,7 @@ from evaluation.attribution import (
 )
 from evaluation.reason_metrics import reason_metrics_for_report
 from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
+from evaluation.error_taxonomy import error_taxonomy_for_report
 from repositories.analysis_run_repo import AnalysisRunRepository
 from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
@@ -104,6 +105,7 @@ async def run_evaluator(
             reason_stats: dict[str, dict[str, dict[str, int]]] = {}  # code -> market -> count
             reason_metrics_decisions: list[tuple[str, list]] = []  # (market, reason_codes) per decision
             reason_failure_decisions: list[tuple[str, str, list]] = []  # (market, outcome, reason_codes) per decision
+            error_taxonomy_decisions: list[tuple[str, str, float | None, list]] = []  # (market, outcome, confidence, reason_codes)
 
             for run, res in resolved:
                 mo_raw = res.market_outcomes_json
@@ -122,7 +124,7 @@ async def run_evaluator(
 
                 # Confidence banding: get predictions for this run
                 preds = await pred_repo.list_by_analysis_run(run.id)
-                market_to_confidence: dict[str, float] = {}
+                market_to_confidence: dict[str, float | None] = {}
                 key_map = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng"}
                 for p in preds:
                     k = key_map.get((p.market or "").upper(), "")
@@ -152,8 +154,10 @@ async def run_evaluator(
                 for m in markets:
                     codes = list(reason_codes.get(m) or [])
                     outcome = outcomes.get(m, "UNRESOLVED")
+                    conf = market_to_confidence.get(m)
                     reason_metrics_decisions.append((m, codes))
                     reason_failure_decisions.append((m, outcome, codes))
+                    error_taxonomy_decisions.append((m, outcome, conf, codes))
                 for row in emit_attribution_rows(reason_codes, outcomes):
                     code = row.reason_code
                     if code not in reason_stats:
@@ -208,6 +212,7 @@ async def run_evaluator(
 
             rm_block = reason_metrics_for_report(reason_metrics_decisions)
             rf_block = reason_failure_metrics_for_report(reason_failure_decisions)
+            et_block = error_taxonomy_for_report(error_taxonomy_decisions)
             report = {
                 "overall": {
                     "total_snapshots": total_snapshots,
@@ -217,9 +222,11 @@ async def run_evaluator(
                 "reason_effectiveness": reason_effectiveness,
                 "reason_metrics": rm_block["reason_metrics"],
                 "reason_failure_metrics": rf_block["reason_failure_metrics"],
+                "error_taxonomy": et_block["error_taxonomy"],
                 "meta": {
                     "reason_metrics_version": rm_block["meta"]["reason_metrics_version"],
                     "reason_failure_metrics_version": rf_block["meta"]["reason_failure_metrics_version"],
+                    "error_taxonomy_version": et_block["meta"]["error_taxonomy_version"],
                 },
             }
             output_path.parent.mkdir(parents=True, exist_ok=True)
