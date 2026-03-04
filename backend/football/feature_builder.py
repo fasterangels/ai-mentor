@@ -4,6 +4,7 @@ from typing import Any
 
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
+from .historical_learning import store_prediction
 from .injury_impact import build_injury_impact
 from .lineup_strength import build_lineup_strength
 from .live_momentum import build_live_momentum
@@ -103,6 +104,7 @@ def build_features(
     payload_dict = {"meta": meta}
     prediction = build_prediction(payload_dict)
     meta["model_prediction"] = prediction.__dict__
+    store_prediction(match_id, meta["model_prediction"])
     if live_data is not None:
         live_probs = update_live_probability(
             meta["model_prediction"],
