@@ -128,6 +128,39 @@ def lookup_reliabilities(
     return out
 
 
+def reason_weight(reliability: float) -> float:
+    """
+    Deterministic weight function for v1.
+
+    reliability in [0,1]; emphasize reliable reasons, downweight weak ones.
+    Example mapping:
+        w = max(0.0, (reliability - 0.3) / 0.7)
+    """
+    r = max(0.0, min(1.0, float(reliability)))
+    w = (r - 0.3) / 0.7
+    return max(0.0, min(1.0, w))
+
+
+def weighted_reason_strength(reliabilities: List[Tuple[str, float]]) -> float:
+    """
+    Compute weighted mean of reliabilities using reason_weight.
+
+    If all weights are zero, fallback to simple mean of reliabilities.
+    """
+    if not reliabilities:
+        return 0.0
+    ws: List[float] = []
+    rs: List[float] = []
+    for _, r in reliabilities:
+        w = reason_weight(r)
+        ws.append(w)
+        rs.append(float(r))
+    denom = sum(ws)
+    if denom > 0.0:
+        return sum(w * r for w, r in zip(ws, rs)) / denom
+    return sum(rs) / float(len(rs))
+
+
 def compute_score(
     conf_cal: float,
     reliabilities: List[Tuple[str, float]],
@@ -146,10 +179,7 @@ def compute_score(
     """
     flags: List[str] = []
 
-    if reliabilities:
-        reason_strength = sum(r for _, r in reliabilities) / float(len(reliabilities))
-    else:
-        reason_strength = 0.0
+    reason_strength = weighted_reason_strength(reliabilities)
 
     penalties = 0.0
     if reason_conflicts:
