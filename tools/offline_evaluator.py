@@ -32,6 +32,7 @@ from evaluation.attribution import (
     reason_codes_by_market_from_resolution,
 )
 from evaluation.reason_metrics import reason_metrics_for_report
+from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
 from repositories.analysis_run_repo import AnalysisRunRepository
 from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
@@ -102,6 +103,7 @@ async def run_evaluator(
             # Reason effectiveness: per reason_code per market
             reason_stats: dict[str, dict[str, dict[str, int]]] = {}  # code -> market -> count
             reason_metrics_decisions: list[tuple[str, list]] = []  # (market, reason_codes) per decision
+            reason_failure_decisions: list[tuple[str, str, list]] = []  # (market, outcome, reason_codes) per decision
 
             for run, res in resolved:
                 mo_raw = res.market_outcomes_json
@@ -144,11 +146,14 @@ async def run_evaluator(
                 reason_codes = reason_codes_by_market_from_resolution({
                     "reason_codes_by_market_json": getattr(res, "reason_codes_by_market_json", None),
                 })
-                for m in markets:
-                    reason_metrics_decisions.append((m, list(reason_codes.get(m) or [])))
                 outcomes = market_outcomes_from_resolution({
                     "market_outcomes_json": getattr(res, "market_outcomes_json", None),
                 })
+                for m in markets:
+                    codes = list(reason_codes.get(m) or [])
+                    outcome = outcomes.get(m, "UNRESOLVED")
+                    reason_metrics_decisions.append((m, codes))
+                    reason_failure_decisions.append((m, outcome, codes))
                 for row in emit_attribution_rows(reason_codes, outcomes):
                     code = row.reason_code
                     if code not in reason_stats:
@@ -202,6 +207,7 @@ async def run_evaluator(
                     }
 
             rm_block = reason_metrics_for_report(reason_metrics_decisions)
+            rf_block = reason_failure_metrics_for_report(reason_failure_decisions)
             report = {
                 "overall": {
                     "total_snapshots": total_snapshots,
@@ -210,7 +216,11 @@ async def run_evaluator(
                 "per_market_accuracy": per_market_report,
                 "reason_effectiveness": reason_effectiveness,
                 "reason_metrics": rm_block["reason_metrics"],
-                "meta": {"reason_metrics_version": rm_block["meta"]["reason_metrics_version"]},
+                "reason_failure_metrics": rf_block["reason_failure_metrics"],
+                "meta": {
+                    "reason_metrics_version": rm_block["meta"]["reason_metrics_version"],
+                    "reason_failure_metrics_version": rf_block["meta"]["reason_failure_metrics_version"],
+                },
             }
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
@@ -222,8 +232,15 @@ async def run_evaluator(
                 "overall": {"total_snapshots": 0, "resolved_snapshots": 0},
                 "per_market_accuracy": {},
                 "reason_effectiveness": {},
-                "reason_metrics": {"coactivation": {"global": {}, "per_market": {}}, "conflicts": {"global": {"conflict_count": 0, "conflict_rate": 0.0, "decision_count": 0, "top_pairs": []}, "per_market": {}}},
-                "meta": {"reason_metrics_version": 1},
+                "reason_metrics": {
+                    "coactivation": {"global": {}, "per_market": {}},
+                    "conflicts": {
+                        "global": {"conflict_count": 0, "conflict_rate": 0.0, "decision_count": 0, "top_pairs": []},
+                        "per_market": {},
+                    },
+                },
+                "reason_failure_metrics": {},
+                "meta": {"reason_metrics_version": 1, "reason_failure_metrics_version": 1},
                 "warnings": ["NO_SCHEMA_DETECTED"],
             }
             output_path.parent.mkdir(parents=True, exist_ok=True)
