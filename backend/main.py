@@ -14,21 +14,32 @@ from sources.registry import get_source, list_sources
 from football.feature_builder import build_features_payload
 from football.mock_providers import MockFootballOddsProvider, MockFootballStatsProvider
 from football.http_providers import HttpJsonFootballOddsProvider, HttpJsonFootballStatsProvider
+from football.adapters import ApiFootballStatsProvider, OddsApiProvider
 
-# Football feature builder: real HTTP providers if both BASE_URLs set, else mocks.
+# Football stats: A) API_FOOTBALL_KEY -> ApiFootball, B) FOOTBALL_STATS_BASE_URL -> HttpJson, C) Mock
+_api_football_key = os.environ.get("API_FOOTBALL_KEY", "").strip()
 _stats_base = os.environ.get("FOOTBALL_STATS_BASE_URL", "").strip()
-_odds_base = os.environ.get("FOOTBALL_ODDS_BASE_URL", "").strip()
-if _stats_base and _odds_base:
+if _api_football_key:
+    stats_provider = ApiFootballStatsProvider(api_key=_api_football_key)
+elif _stats_base:
     stats_provider = HttpJsonFootballStatsProvider(
         _stats_base,
         api_key=os.environ.get("FOOTBALL_STATS_API_KEY") or None,
     )
+else:
+    stats_provider = MockFootballStatsProvider()
+
+# Football odds: A) ODDS_API_KEY -> OddsApi, B) FOOTBALL_ODDS_BASE_URL -> HttpJson, C) Mock
+_odds_api_key = os.environ.get("ODDS_API_KEY", "").strip()
+_odds_base = os.environ.get("FOOTBALL_ODDS_BASE_URL", "").strip()
+if _odds_api_key:
+    odds_provider = OddsApiProvider(api_key=_odds_api_key)
+elif _odds_base:
     odds_provider = HttpJsonFootballOddsProvider(
         _odds_base,
         api_key=os.environ.get("FOOTBALL_ODDS_API_KEY") or None,
     )
 else:
-    stats_provider = MockFootballStatsProvider()
     odds_provider = MockFootballOddsProvider()
 
 
