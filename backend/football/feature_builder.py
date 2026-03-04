@@ -6,6 +6,7 @@ from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
 from .odds_intelligence import build_odds_intelligence
 from .prediction_model import build_prediction
+from .tactical_signals import build_tactical_signals
 from .team_intelligence import build_team_intelligence
 
 
@@ -37,6 +38,10 @@ def build_features(
     away_intel = build_team_intelligence(away_team_id, last6.get(away_team_id, []))
 
     h2h = stats.get_h2h(match.home.team_id, match.away.team_id, n=h2h_n)
+    last_home = last6.get(home_team_id, [])
+    last_away = last6.get(away_team_id, [])
+    tactical = build_tactical_signals(last_home, last_away, h2h)
+
     odds_quotes = odds.get_odds(match_id)
     odds_intel = build_odds_intelligence(odds_quotes)
 
@@ -54,6 +59,7 @@ def build_features(
             "away": away_intel.__dict__,
         },
         "odds_intelligence": odds_intel.__dict__,
+        "tactical_signals": tactical.__dict__,
     }
     payload_dict = {"meta": meta}
     prediction = build_prediction(payload_dict)
