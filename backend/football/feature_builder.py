@@ -17,6 +17,7 @@ from .prediction_model import build_prediction
 from .schedule_fatigue import build_schedule_fatigue
 from .tactical_signals import build_tactical_signals
 from .team_intelligence import build_team_intelligence
+from .value_detector import compute_edges, to_reason_codes
 
 
 def build_features(
@@ -111,6 +112,11 @@ def build_features(
         bins = build_calibration_bins(records)
         calibrated = apply_calibration(meta["model_prediction"], bins)
         meta["calibrated_prediction"] = calibrated
+    model_probs = meta.get("calibrated_prediction") or meta["model_prediction"]
+    implied_probs = meta["odds_intelligence"]["implied_probabilities"]
+    value_signal = compute_edges(model_probs, implied_probs)
+    meta["value_signal"] = value_signal.__dict__
+    meta["value_reason_codes"] = to_reason_codes(value_signal)
     if live_data is not None:
         live_probs = update_live_probability(
             meta["model_prediction"],
