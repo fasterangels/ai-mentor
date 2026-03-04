@@ -44,6 +44,7 @@ def save_policy(policy: DecisionPolicy, path: str) -> None:
                 "thresholds": policy.thresholds,
             },
             indent=2,
+            sort_keys=True,
         )
     )
 

@@ -170,6 +170,8 @@ async def build_evaluation_report(
                     "reason_codes": codes_list,
                     # TODO: if we later compute reason_conflicts, populate here.
                     "reason_conflicts": False,
+                    # Numeric outcome for training artifacts (1=success, 0=otherwise).
+                    "outcome": 1 if outcome == "SUCCESS" else 0 if outcome == "FAILURE" else None,
                 }
             )
             for code in codes_list:
@@ -282,11 +284,12 @@ async def build_evaluation_report(
         "per_market": rr_per_market,
     }
 
-    de_metrics, policy_version, calibrator_version = evaluate_decision_engine_with_policy(
+    de_metrics, de_outputs, policy_version, calibrator_version = evaluate_decision_engine_with_policy(
         decision_engine_predictions,
         reason_reliability_for_engine,
     )
     report["decision_engine_metrics"] = de_metrics
+    report["decision_engine_outputs"] = de_outputs
     report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
     report.setdefault("meta", {})["decision_policy_version"] = policy_version
     report.setdefault("meta", {})["calibrator_version"] = calibrator_version

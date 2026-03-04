@@ -157,6 +157,7 @@ def evaluate_decision_engine(
     per_market: Dict[str, Dict[str, Any]] = {}
 
     example_entries: List[Dict[str, Any]] = []
+    outputs: List[Dict[str, Any]] = []
     sum_conf_raw = 0.0
     sum_conf_cal = 0.0
 
@@ -183,6 +184,20 @@ def evaluate_decision_engine(
 
         for flag in out.flags:
             flag_counts[flag] = flag_counts.get(flag, 0) + 1
+
+        # Full per-prediction output (lightweight) for training artifacts.
+        outputs.append(
+            {
+                "id": pred.get("id"),
+                "market": di.market,
+                "score": out.score,
+                "conf_raw": float(di.conf_raw),
+                "conf_cal": float(out.conf_cal),
+                "decision": out.decision,
+                "flags": list(out.flags),
+                "outcome": pred.get("outcome"),
+            }
+        )
 
         if len(example_entries) < 20:
             example_entries.append(
@@ -229,6 +244,7 @@ def evaluate_decision_engine(
         "examples": example_entries,
         "avg_conf_raw": avg_conf_raw,
         "avg_conf_cal": avg_conf_cal,
+        "outputs": outputs,
     }
 
 
@@ -237,7 +253,7 @@ def evaluate_decision_engine_with_policy(
     reason_reliability: Dict[str, Any],
     policy_path: Optional[str] = None,
     calibrator_path: Optional[str] = None,
-) -> Tuple[Dict[str, Any], str, str]:
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]], str, str]:
     """
     Convenience wrapper that loads a versioned policy and evaluates the engine.
 
@@ -261,6 +277,7 @@ def evaluate_decision_engine_with_policy(
         thresholds=policy.thresholds,
         calibrator=calibrator,
     )
-    return metrics, policy.version, calibrator.version
+    outputs = metrics.get("outputs") or []
+    return metrics, outputs, policy.version, calibrator.version
 
 
