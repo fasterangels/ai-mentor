@@ -183,3 +183,136 @@ def reason_metrics_for_report(
         "meta": {"reason_metrics_version": REASON_METRICS_VERSION},
     }
 
+
+def _normalize_reason_reliability_windows(
+    reason_reliability: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Normalize various historical reason_reliability shapes into a windowed form:
+
+      {
+        "global": {
+          "all_time": {reason: reliability},
+          "90d": {...},
+          "30d": {...}
+        },
+        "per_market": {
+          market: {
+            "all_time": {...},
+            "90d": {...},
+            "30d": {...}
+          }
+        }
+      }
+
+    Backwards-compatibility:
+      - If "global" is a flat {reason: reliability} map, treat it as "all_time".
+      - If per_market[market] is a flat {reason: reliability} map, treat it as "all_time".
+    """
+    rr = reason_reliability or {}
+
+    global_block = rr.get("global") or {}
+    per_market_block = rr.get("per_market") or {}
+
+    normalized_global: Dict[str, Dict[str, float]] = {}
+    # Detect flat vs windowed global
+    if isinstance(global_block, dict) and global_block:
+        sample_value = next(iter(global_block.values()))
+        if isinstance(sample_value, dict):
+            # Already windowed: keys are window names
+            for win_name, bucket in global_block.items():
+                if not isinstance(bucket, dict):
+                    continue
+                normalized_global[str(win_name)] = {
+                    str(reason): float(val) for reason, val in bucket.items()
+                }
+        else:
+            # Flat map {reason: reliability} -> all_time window
+            normalized_global["all_time"] = {
+                str(reason): float(val) for reason, val in global_block.items()
+            }
+
+    normalized_per_market: Dict[str, Dict[str, Dict[str, float]]] = {}
+    if isinstance(per_market_block, dict):
+        for market, entry in per_market_block.items():
+            market_key = str(market)
+            if not isinstance(entry, dict) or not entry:
+                continue
+            sample_value = next(iter(entry.values()))
+            if isinstance(sample_value, dict):
+                # Already windowed
+                win_map: Dict[str, Dict[str, float]] = {}
+                for win_name, bucket in entry.items():
+                    if not isinstance(bucket, dict):
+                        continue
+                    win_map[str(win_name)] = {
+                        str(reason): float(val) for reason, val in bucket.items()
+                    }
+                normalized_per_market[market_key] = win_map
+            else:
+                # Flat map {reason: reliability} -> all_time
+                normalized_per_market[market_key] = {
+                    "all_time": {
+                        str(reason): float(val) for reason, val in entry.items()
+                    }
+                }
+
+    return {
+        "global": normalized_global,
+        "per_market": normalized_per_market,
+    }
+
+
+def select_reliability(
+    reason: str,
+    market: str,
+    reason_reliability: Dict[str, Any],
+    window: str = "90d",
+) -> float:
+    """
+    Resolve reliability with preference order:
+        per_market[market][window]
+        per_market[market]["all_time"]
+        global[window]
+        global["all_time"]
+        fallback = 0.5
+
+    Supports both the new windowed structure and legacy flat maps.
+    """
+    rr_norm = _normalize_reason_reliability_windows(reason_reliability)
+    global_rr: Dict[str, Dict[str, float]] = rr_norm.get("global") or {}
+    per_market_rr: Dict[str, Dict[str, Dict[str, float]]] = rr_norm.get("per_market") or {}
+
+    buckets: List[Dict[str, float]] = []
+
+    # 1) per_market[market][window]
+    market_block = per_market_rr.get(market)
+    if market_block:
+        bucket = market_block.get(window)
+        if isinstance(bucket, dict):
+            buckets.append(bucket)
+        # 2) per_market[market]["all_time"]
+        bucket_all = market_block.get("all_time")
+        if isinstance(bucket_all, dict):
+            buckets.append(bucket_all)
+
+    # 3) global[window]
+    global_win = global_rr.get(window)
+    if isinstance(global_win, dict):
+        buckets.append(global_win)
+
+    # 4) global["all_time"]
+    global_all = global_rr.get("all_time")
+    if isinstance(global_all, dict):
+        buckets.append(global_all)
+
+    for bucket in buckets:
+        if reason in bucket:
+            try:
+                return float(bucket[reason])
+            except (TypeError, ValueError):
+                continue
+
+    return 0.5
+
+

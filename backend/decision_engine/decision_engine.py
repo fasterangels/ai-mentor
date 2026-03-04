@@ -16,6 +16,7 @@ from backend.calibration.confidence_calibration import (
     ConfidenceCalibrator,
     apply as apply_calibrator,
 )
+from evaluation.reason_metrics import select_reliability
 
 
 @dataclass
@@ -118,12 +119,41 @@ def lookup_reliabilities(
     """
     market_table = artifacts.reliability_table.get(market, {})
     out: List[Tuple[str, float]] = []
+
+    # Build a lightweight reason_reliability structure from the table to
+    # enable window-aware selection while remaining backwards compatible.
+    # We only expose an all_time window here; select_reliability will
+    # fallback appropriately when other windows are not present.
+    global_rr: Dict[str, float] = {}
+    per_market_rr: Dict[str, Dict[str, float]] = {}
+    for mkt, reason_map in artifacts.reliability_table.items():
+        if not isinstance(reason_map, dict):
+            continue
+        per_market_rr[mkt] = {}
+        for r, v in reason_map.items():
+            try:
+                val = float(v)
+            except (TypeError, ValueError):
+                continue
+            per_market_rr[mkt][r] = val
+            # First occurrence wins for global map
+            if r not in global_rr:
+                global_rr[r] = val
+
+    reason_reliability = {
+        "global": {"all_time": global_rr},
+        "per_market": {m: {"all_time": rm} for m, rm in per_market_rr.items()},
+    }
+
     for reason in reasons:
         if not reason:
             continue
-        rel = market_table.get(reason)
-        if rel is None:
-            rel = 0.50
+        rel = select_reliability(
+            reason=reason,
+            market=market,
+            reason_reliability=reason_reliability,
+            window=artifacts.window,
+        )
         out.append((reason, rel))
     return out
 
