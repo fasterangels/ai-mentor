@@ -7,6 +7,7 @@ from .providers import FootballOddsProvider, FootballStatsProvider
 from .injury_impact import build_injury_impact
 from .odds_intelligence import build_odds_intelligence
 from .prediction_model import build_prediction
+from .schedule_fatigue import build_schedule_fatigue
 from .tactical_signals import build_tactical_signals
 from .team_intelligence import build_team_intelligence
 
@@ -43,6 +44,8 @@ def build_features(
     h2h = stats.get_h2h(match.home.team_id, match.away.team_id, n=h2h_n)
     last_home = last6.get(home_team_id, [])
     last_away = last6.get(away_team_id, [])
+    home_fatigue = build_schedule_fatigue(home_team_id, last_home)
+    away_fatigue = build_schedule_fatigue(away_team_id, last_away)
     tactical = build_tactical_signals(last_home, last_away, h2h)
 
     odds_quotes = odds.get_odds(match_id)
@@ -67,6 +70,10 @@ def build_features(
         },
         "odds_intelligence": odds_intel.__dict__,
         "tactical_signals": tactical.__dict__,
+        "schedule_fatigue": {
+            "home": home_fatigue.__dict__,
+            "away": away_fatigue.__dict__,
+        },
     }
     payload_dict = {"meta": meta}
     prediction = build_prediction(payload_dict)
