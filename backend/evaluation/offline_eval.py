@@ -282,12 +282,13 @@ async def build_evaluation_report(
         "per_market": rr_per_market,
     }
 
-    de_metrics, policy_version = evaluate_decision_engine_with_policy(
+    de_metrics, policy_version, calibrator_version = evaluate_decision_engine_with_policy(
         decision_engine_predictions,
         reason_reliability_for_engine,
     )
     report["decision_engine_metrics"] = de_metrics
     report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
     report.setdefault("meta", {})["decision_policy_version"] = policy_version
+    report.setdefault("meta", {})["calibrator_version"] = calibrator_version
 
     return report

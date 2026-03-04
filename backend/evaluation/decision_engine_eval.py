@@ -12,6 +12,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from backend.calibration.confidence_calibration import (
+    ConfidenceCalibrator,
+    load_calibrator,
+)
 from backend.decision_engine.decision_engine import (
     DecisionArtifacts,
     DecisionInput,
@@ -112,6 +116,7 @@ def evaluate_decision_engine(
     reason_reliability: Dict[str, Any],
     *,
     thresholds: Optional[Dict[str, float]] = None,
+    calibrator: Optional[ConfidenceCalibrator] = None,
 ) -> Dict[str, Any]:
     """
     Run the decision engine in shadow mode over a list of predictions.
@@ -152,10 +157,14 @@ def evaluate_decision_engine(
     per_market: Dict[str, Dict[str, Any]] = {}
 
     example_entries: List[Dict[str, Any]] = []
+    sum_conf_raw = 0.0
+    sum_conf_cal = 0.0
 
     for pred, di in _iter_predictions(predictions):
-        out = decide(di, artifacts)
+        out = decide(di, artifacts, calibrator=calibrator)
         n += 1
+        sum_conf_raw += float(di.conf_raw)
+        sum_conf_cal += float(out.conf_cal)
         if out.decision == "GO":
             go += 1
         else:
@@ -197,6 +206,9 @@ def evaluate_decision_engine(
         "go_rate": _rate(go, n),
     }
 
+    avg_conf_raw = sum_conf_raw / n if n > 0 else 0.0
+    avg_conf_cal = sum_conf_cal / n if n > 0 else 0.0
+
     per_market_out: Dict[str, Any] = {}
     for market in sorted(per_market.keys()):
         stats = per_market[market]
@@ -215,6 +227,8 @@ def evaluate_decision_engine(
         "flag_counts": flag_counts_sorted,
         "per_market": per_market_out,
         "examples": example_entries,
+        "avg_conf_raw": avg_conf_raw,
+        "avg_conf_cal": avg_conf_cal,
     }
 
 
@@ -222,23 +236,31 @@ def evaluate_decision_engine_with_policy(
     predictions: List[Dict[str, Any]],
     reason_reliability: Dict[str, Any],
     policy_path: Optional[str] = None,
-) -> Tuple[Dict[str, Any], str]:
+    calibrator_path: Optional[str] = None,
+) -> Tuple[Dict[str, Any], str, str]:
     """
     Convenience wrapper that loads a versioned policy and evaluates the engine.
 
-    Returns a tuple of (metrics, policy_version).
+    Returns a tuple of (metrics, policy_version, calibrator_version).
     """
+    base_dir = Path(__file__).resolve().parents[2]
+
     if policy_path is None:
         # Resolve the default policy file relative to the repository root.
-        base_dir = Path(__file__).resolve().parents[2]
         policy_path = str(base_dir / "backend" / "policies" / "decision_engine_policy.json")
 
+    if calibrator_path is None:
+        calibrator_path = str(base_dir / "backend" / "calibration" / "confidence_calibrator.json")
+
     policy = load_policy(policy_path)
+    calibrator = load_calibrator(calibrator_path)
+
     metrics = evaluate_decision_engine(
         predictions,
         reason_reliability,
         thresholds=policy.thresholds,
+        calibrator=calibrator,
     )
-    return metrics, policy.version
+    return metrics, policy.version, calibrator.version
 
 

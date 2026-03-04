@@ -12,6 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.calibration.confidence_calibration import (
+    ConfidenceCalibrator,
+    apply as apply_calibrator,
+)
+
 
 @dataclass
 class DecisionInput:
@@ -80,18 +85,24 @@ class DecisionOutput:
     artifacts_version: str = ""
 
 
-def calibrate_confidence(conf_raw: float) -> float:
+def calibrate_confidence(
+    conf_raw: float,
+    calibrator: Optional[ConfidenceCalibrator] = None,
+) -> float:
     """
     Calibrate raw confidence into a calibrated value in [0.0, 1.0].
 
-    For now this is identity with clamping; a more sophisticated
-    calibration curve can be plugged in later.
+    By default this is identity with clamping; when a calibrator is
+    provided, its binning curve is applied instead.
     """
-    if conf_raw < 0.0:
-        return 0.0
-    if conf_raw > 1.0:
-        return 1.0
-    return conf_raw
+    if calibrator is None:
+        if conf_raw < 0.0:
+            return 0.0
+        if conf_raw > 1.0:
+            return 1.0
+        return conf_raw
+
+    return apply_calibrator(calibrator, conf_raw)
 
 
 def lookup_reliabilities(
@@ -155,6 +166,7 @@ def compute_score(
 def decide(
     input: DecisionInput,
     artifacts: DecisionArtifacts,
+    calibrator: Optional[ConfidenceCalibrator] = None,
 ) -> DecisionOutput:
     """
     Compute a GO/NO-GO decision for a single market.
@@ -175,7 +187,7 @@ def decide(
 
     Threshold default for unknown markets is 0.55.
     """
-    conf_cal = calibrate_confidence(input.conf_raw)
+    conf_cal = calibrate_confidence(input.conf_raw, calibrator=calibrator)
 
     reliabilities = lookup_reliabilities(input.market, input.reasons, artifacts)
     score, flags = compute_score(
