@@ -1,0 +1,67 @@
+{
+  "computed_at_utc": "2026-03-04T14:39:51.842337+00:00",
+  "missing_timestamps_count": 0,
+  "rows": [
+    {
+      "accuracy": 0.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 1.0,
+      "correct": 0,
+      "market": "gg_ng",
+      "neutral_rate": 0.0,
+      "reason_code": "P(GG) proxy=0.05",
+      "total": 1
+    },
+    {
+      "accuracy": 0.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 1.0,
+      "correct": 0,
+      "market": "gg_ng",
+      "neutral_rate": 0.0,
+      "reason_code": "defensive strength present",
+      "total": 1
+    },
+    {
+      "accuracy": 1.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 0.7696,
+      "correct": 1,
+      "market": "one_x_two",
+      "neutral_rate": 0.0,
+      "reason_code": "H2H used",
+      "total": 1
+    },
+    {
+      "accuracy": 1.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 0.7696,
+      "correct": 1,
+      "market": "one_x_two",
+      "neutral_rate": 0.0,
+      "reason_code": "top=HOME sep=0.13",
+      "total": 1
+    },
+    {
+      "accuracy": 1.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 0.8948,
+      "correct": 1,
+      "market": "over_under_25",
+      "neutral_rate": 0.0,
+      "reason_code": "expected goals above threshold",
+      "total": 1
+    },
+    {
+      "accuracy": 1.0,
+      "age_band": "2h-6h",
+      "avg_confidence": 0.8948,
+      "correct": 1,
+      "market": "over_under_25",
+      "neutral_rate": 0.0,
+      "reason_code": "xG proxy=2.90",
+      "total": 1
+    }
+  ],
+  "run_id": "staleness_eval_20260304_143951"
+}

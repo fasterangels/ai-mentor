@@ -1,0 +1,21 @@
+{
+  "computed_at_utc": "2026-03-04T14:35:22.599345+00:00",
+  "reports": [
+    {
+      "computed_at_utc": "2026-03-04T14:35:22.599345+00:00",
+      "envelope_match": false,
+      "fixture_id": "delta_f1",
+      "live_snapshot_id": "live_sid",
+      "observed_at_delta_ms": 1000.0,
+      "payload_match": false,
+      "recorded_snapshot_id": "rec_sid",
+      "status": "COMPLETE"
+    }
+  ],
+  "run_id": "delta_eval_20260304_143522",
+  "summary": {
+    "complete": 1,
+    "incomplete": 0,
+    "total": 1
+  }
+}
