@@ -21,12 +21,16 @@ class FitConfig:
         min_coverage: Minimum fraction of decisions that should be GO.
         objective: "precision" or "f1".
         threshold_grid: Optional explicit list of thresholds to search.
+        target_precision: If set, use target-precision fitting.
+        prefer_higher_coverage: When multiple thresholds satisfy target, prefer higher coverage.
         version: Policy version to write once fitted.
     """
 
     min_coverage: float = 0.20
     objective: str = "precision"
     threshold_grid: Optional[List[float]] = None
+    target_precision: Optional[float] = None
+    prefer_higher_coverage: bool = True
     version: str = "v1"
 
 
@@ -134,7 +138,20 @@ def extract_training_rows(report: Dict) -> List[Dict[str, object]]:
     return rows
 
 
-def fit_threshold_for_market(rows: List[Dict[str, object]], cfg: FitConfig) -> float:
+def _default_threshold_grid() -> List[float]:
+    # Deterministic grid from 0.30 to 0.80 inclusive, step 0.01.
+    start, end, step = 0.30, 0.80, 0.01
+    n_steps = int(round((end - start) / step))  # 50 steps
+    return [round(start + i * step, 2) for i in range(n_steps + 1)]
+
+
+def _threshold_grid_from_cfg(cfg: FitConfig) -> List[float]:
+    grid = list(cfg.threshold_grid) if cfg.threshold_grid is not None else _default_threshold_grid()
+    # Ensure deterministic ordering and float casting
+    return [float(t) for t in grid]
+
+
+def _fit_threshold_objective_based(rows: List[Dict[str, object]], cfg: FitConfig) -> float:
     """
     Fit a threshold for a single market according to the chosen objective.
 
@@ -148,7 +165,7 @@ def fit_threshold_for_market(rows: List[Dict[str, object]], cfg: FitConfig) -> f
 
     total_correct = sum(int(r["outcome"]) for r in rows)
 
-    grid = list(cfg.threshold_grid) if cfg.threshold_grid is not None else _default_threshold_grid()
+    grid = _threshold_grid_from_cfg(cfg)
 
     candidates: List[Tuple[float, float, float]] = []  # (threshold, coverage, objective)
     for t in grid:
@@ -177,6 +194,58 @@ def fit_threshold_for_market(rows: List[Dict[str, object]], cfg: FitConfig) -> f
     eligible.sort(key=lambda x: (x[2], x[1], x[0]), reverse=True)
     best_t, _, _ = eligible[0]
     return best_t
+
+
+def fit_threshold_target_precision(rows: List[Dict[str, object]], cfg: FitConfig) -> float:
+    """
+    Choose threshold t that satisfies precision >= cfg.target_precision and maximizes coverage.
+
+    If multiple thresholds satisfy:
+      - pick one with highest coverage
+      - tie-breaker: higher threshold (more conservative)
+    If none satisfy target_precision:
+      - fallback to existing objective-based selection (precision/f1) with min_coverage constraint.
+    """
+    n = len(rows)
+    if n == 0 or cfg.target_precision is None:
+        return DEFAULT_THRESHOLD
+
+    total_correct = sum(int(r["outcome"]) for r in rows)
+    grid = _threshold_grid_from_cfg(cfg)
+
+    candidates: List[Tuple[float, float, float]] = []  # (threshold, coverage, precision)
+    for t in grid:
+        go_rows = [r for r in rows if float(r["score"]) >= t]
+        go_count = len(go_rows)
+        coverage = go_count / float(n) if n > 0 else 0.0
+        correct_go = sum(int(r["outcome"]) for r in go_rows)
+        precision = correct_go / float(go_count) if go_count > 0 else 0.0
+        candidates.append((float(t), coverage, precision))
+
+    # Filter by target precision and optional min_coverage floor.
+    eligible = [
+        c
+        for c in candidates
+        if c[2] >= cfg.target_precision and c[1] >= cfg.min_coverage
+    ]
+
+    if not eligible:
+        # Fallback to objective-based selection with existing min_coverage logic.
+        return _fit_threshold_objective_based(rows, cfg)
+
+    # Prefer higher coverage, then higher threshold (more conservative).
+    eligible.sort(key=lambda x: (x[1], x[0]), reverse=True)
+    best_t, _, _ = eligible[0]
+    return best_t
+
+
+def fit_threshold_for_market(rows: List[Dict[str, object]], cfg: FitConfig) -> float:
+    """
+    Fit a threshold for a single market according to configuration.
+    """
+    if cfg.target_precision is not None:
+        return fit_threshold_target_precision(rows, cfg)
+    return _fit_threshold_objective_based(rows, cfg)
 
 
 def fit_policy(rows: List[Dict[str, object]], cfg: FitConfig) -> DecisionPolicy:

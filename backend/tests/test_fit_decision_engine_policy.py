@@ -88,3 +88,66 @@ def test_tie_break_prefers_higher_coverage_then_higher_threshold() -> None:
     # 0.6 has higher coverage than 0.8, so it should be chosen.
     assert t == 0.6
 
+
+def test_target_precision_max_coverage() -> None:
+    # Synthetic rows for a single market A where:
+    # - threshold 0.40: high coverage, low precision (~0.5)
+    # - threshold 0.60: medium coverage, precision ~0.71
+    # - threshold 0.70: lower coverage, precision ~0.60
+    rows: List[Dict[str, object]] = []
+
+    # 6 correct with high scores
+    for _ in range(6):
+        rows.append({"market": "A", "score": 0.8, "outcome": 1})
+    # 4 incorrect at 0.7
+    for _ in range(4):
+        rows.append({"market": "A", "score": 0.7, "outcome": 0})
+    # 4 correct at 0.6
+    for _ in range(4):
+        rows.append({"market": "A", "score": 0.6, "outcome": 1})
+    # 6 incorrect at 0.4
+    for _ in range(6):
+        rows.append({"market": "A", "score": 0.4, "outcome": 0})
+
+    cfg = FitConfig(
+        min_coverage=0.20,
+        objective="precision",
+        threshold_grid=[0.4, 0.6, 0.7],
+        target_precision=0.70,
+        version="v_target",
+    )
+
+    t = fit_threshold_for_market(rows, cfg)
+    # Only 0.6 meets target precision >= 0.70, so it should be chosen.
+    assert t == 0.6
+
+
+def test_target_precision_fallback_to_objective_when_impossible() -> None:
+    rows = [
+        {"market": "A", "score": 0.4, "outcome": 0},
+        {"market": "A", "score": 0.5, "outcome": 0},
+        {"market": "A", "score": 0.6, "outcome": 0},
+        {"market": "A", "score": 0.7, "outcome": 1},
+    ]
+
+    base_cfg = FitConfig(
+        min_coverage=0.0,
+        objective="precision",
+        threshold_grid=[0.4, 0.6, 0.7],
+        target_precision=None,
+        version="v_base",
+    )
+    base_t = fit_threshold_for_market(rows, base_cfg)
+
+    target_cfg = FitConfig(
+        min_coverage=0.0,
+        objective="precision",
+        threshold_grid=[0.4, 0.6, 0.7],
+        target_precision=0.95,  # impossible to reach
+        version="v_target_fallback",
+    )
+    target_t = fit_threshold_for_market(rows, target_cfg)
+
+    # When target_precision is unattainable, fallback should match objective-based threshold.
+    assert target_t == base_t
+
