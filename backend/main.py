@@ -12,6 +12,8 @@ from sources.base import FetchRequest
 from sources.cache import load_cache, save_cache
 from sources.registry import get_source, list_sources
 from football.feature_builder import build_features_payload
+from football.match_finder import find_match_by_teams, find_matches_by_team
+from football.mock_fixtures import get_mock_fixtures
 from football.mock_providers import MockFootballOddsProvider, MockFootballStatsProvider
 from football.http_providers import HttpJsonFootballOddsProvider, HttpJsonFootballStatsProvider
 from football.adapters import ApiFootballStatsProvider, OddsApiProvider
@@ -147,4 +149,24 @@ def football_features(req: dict) -> dict:
     return build_features_payload(
         match_id, stats_provider, odds_provider, last_n=6, h2h_n=6
     )
+
+
+@app.post("/football/find_match")
+def find_match(req: dict) -> dict:
+    """Find a match by team names query (e.g. 'Arsenal Chelsea'). Returns match or error."""
+    query = req.get("query") or ""
+    fixtures = get_mock_fixtures()
+    match = find_match_by_teams(query, fixtures)
+    if not match:
+        return {"error": "match_not_found"}
+    return match.__dict__
+
+
+@app.post("/football/team_matches")
+def team_matches(req: dict) -> dict:
+    """Return all fixtures matching a team name (e.g. 'Barcelona')."""
+    team = req.get("team") or ""
+    fixtures = get_mock_fixtures()
+    matches = find_matches_by_team(team, fixtures)
+    return {"matches": [m.__dict__ for m in matches]}
 
