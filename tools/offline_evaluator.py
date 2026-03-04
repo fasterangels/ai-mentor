@@ -34,6 +34,8 @@ from evaluation.attribution import (
 from evaluation.reason_metrics import reason_metrics_for_report
 from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
 from evaluation.error_taxonomy import error_taxonomy_for_report
+from evaluation.reason_reliability import compute_reason_reliability
+from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
 from repositories.analysis_run_repo import AnalysisRunRepository
 from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
@@ -67,6 +69,7 @@ async def run_evaluator(
 
     try:
         from core.database import get_database_manager
+
         async with get_database_manager().session() as session:
             run_repo = AnalysisRunRepository(session)
             resolution_repo = SnapshotResolutionRepository(session)
@@ -106,6 +109,7 @@ async def run_evaluator(
             reason_metrics_decisions: list[tuple[str, list]] = []  # (market, reason_codes) per decision
             reason_failure_decisions: list[tuple[str, str, list]] = []  # (market, outcome, reason_codes) per decision
             error_taxonomy_decisions: list[tuple[str, str, float | None, list]] = []  # (market, outcome, confidence, reason_codes)
+            would_refuse_decisions: list[DecisionRecord] = []
 
             for run, res in resolved:
                 mo_raw = res.market_outcomes_json
@@ -125,7 +129,13 @@ async def run_evaluator(
                 # Confidence banding: get predictions for this run
                 preds = await pred_repo.list_by_analysis_run(run.id)
                 market_to_confidence: dict[str, float | None] = {}
-                key_map = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng"}
+                key_map = {
+                    "1X2": "one_x_two",
+                    "OU25": "over_under_25",
+                    "OU_2.5": "over_under_25",
+                    "GGNG": "gg_ng",
+                    "BTTS": "gg_ng",
+                }
                 for p in preds:
                     k = key_map.get((p.market or "").upper(), "")
                     if k and k in markets:
@@ -145,12 +155,16 @@ async def run_evaluator(
                                     per_market_bands[m][band]["neutral_count"] += 1
 
                 # Reason attribution
-                reason_codes = reason_codes_by_market_from_resolution({
-                    "reason_codes_by_market_json": getattr(res, "reason_codes_by_market_json", None),
-                })
-                outcomes = market_outcomes_from_resolution({
-                    "market_outcomes_json": getattr(res, "market_outcomes_json", None),
-                })
+                reason_codes = reason_codes_by_market_from_resolution(
+                    {
+                        "reason_codes_by_market_json": getattr(res, "reason_codes_by_market_json", None),
+                    }
+                )
+                outcomes = market_outcomes_from_resolution(
+                    {
+                        "market_outcomes_json": getattr(res, "market_outcomes_json", None),
+                    }
+                )
                 for m in markets:
                     codes = list(reason_codes.get(m) or [])
                     outcome = outcomes.get(m, "UNRESOLVED")
@@ -158,6 +172,14 @@ async def run_evaluator(
                     reason_metrics_decisions.append((m, codes))
                     reason_failure_decisions.append((m, outcome, codes))
                     error_taxonomy_decisions.append((m, outcome, conf, codes))
+                    would_refuse_decisions.append(
+                        DecisionRecord(
+                            market=m,
+                            outcome=outcome,
+                            confidence=conf,
+                            reason_codes=codes,
+                        )
+                    )
                 for row in emit_attribution_rows(reason_codes, outcomes):
                     code = row.reason_code
                     if code not in reason_stats:
@@ -177,7 +199,7 @@ async def run_evaluator(
                     return None
                 return round(s / (s + f), 4)
 
-            per_market_report = {}
+            per_market_report: dict[str, dict[str, object]] = {}
             for m in markets:
                 d = per_market[m]
                 s, f, n = d["success_count"], d["failure_count"], d["neutral_count"]
@@ -197,7 +219,7 @@ async def run_evaluator(
                                 "accuracy": accuracy(sb["success_count"], sb["failure_count"]),
                             }
 
-            reason_effectiveness = {}
+            reason_effectiveness: dict[str, dict[str, object]] = {}
             for code, by_market in reason_stats.items():
                 reason_effectiveness[code] = {}
                 for m, counts in by_market.items():
@@ -213,6 +235,11 @@ async def run_evaluator(
             rm_block = reason_metrics_for_report(reason_metrics_decisions)
             rf_block = reason_failure_metrics_for_report(reason_failure_decisions)
             et_block = error_taxonomy_for_report(error_taxonomy_decisions)
+            reason_reliability = compute_reason_reliability(rf_block["reason_failure_metrics"])
+            wr_block = would_refuse_for_report(
+                would_refuse_decisions,
+                reason_reliability=reason_reliability,
+            )
             report = {
                 "overall": {
                     "total_snapshots": total_snapshots,
@@ -223,10 +250,12 @@ async def run_evaluator(
                 "reason_metrics": rm_block["reason_metrics"],
                 "reason_failure_metrics": rf_block["reason_failure_metrics"],
                 "error_taxonomy": et_block["error_taxonomy"],
+                "would_refuse_metrics": wr_block["would_refuse_metrics"],
                 "meta": {
                     "reason_metrics_version": rm_block["meta"]["reason_metrics_version"],
                     "reason_failure_metrics_version": rf_block["meta"]["reason_failure_metrics_version"],
                     "error_taxonomy_version": et_block["meta"]["error_taxonomy_version"],
+                    "would_refuse_version": wr_block["meta"]["would_refuse_version"],
                 },
             }
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -242,12 +271,40 @@ async def run_evaluator(
                 "reason_metrics": {
                     "coactivation": {"global": {}, "per_market": {}},
                     "conflicts": {
-                        "global": {"conflict_count": 0, "conflict_rate": 0.0, "decision_count": 0, "top_pairs": []},
+                        "global": {
+                            "conflict_count": 0,
+                            "conflict_rate": 0.0,
+                            "decision_count": 0,
+                            "top_pairs": [],
+                        },
                         "per_market": {},
                     },
                 },
                 "reason_failure_metrics": {},
-                "meta": {"reason_metrics_version": 1, "reason_failure_metrics_version": 1},
+                "would_refuse_metrics": {
+                    "global": {
+                        "total_decisions": 0,
+                        "would_refuse_count": 0,
+                        "would_refuse_rate": 0.0,
+                        "errors_count": 0,
+                        "would_refuse_on_errors_count": 0,
+                        "would_refuse_on_errors_rate": 0.0,
+                        "correct_count": 0,
+                        "would_refuse_on_correct_count": 0,
+                        "would_refuse_on_correct_rate": 0.0,
+                    },
+                    "per_market": {},
+                    "rules": {"global": {}, "per_market": {}},
+                    "params": {
+                        "low_conf_threshold": 0.55,
+                        "reliability_threshold": 0.45,
+                    },
+                },
+                "meta": {
+                    "reason_metrics_version": 1,
+                    "reason_failure_metrics_version": 1,
+                    "would_refuse_version": 1,
+                },
                 "warnings": ["NO_SCHEMA_DETECTED"],
             }
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -271,7 +328,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Offline evaluator: snapshot resolutions -> evaluation_report.json")
     ap.add_argument("--from-date", type=str, default=None, help="Filter snapshots from this date (ISO8601)")
     ap.add_argument("--to-date", type=str, default=None, help="Filter snapshots to this date (ISO8601)")
-    ap.add_argument("--only-final", action="store_true", default=True, help="Only include resolved snapshots (default: True)")
+    ap.add_argument(
+        "--only-final",
+        action="store_true",
+        default=True,
+        help="Only include resolved snapshots (default: True)",
+    )
     ap.add_argument("--all", action="store_true", help="Include all snapshots (not only resolved)")
     ap.add_argument("--output", type=Path, default=Path("evaluation_report.json"), help="Output JSON path")
     args = ap.parse_args()
@@ -286,3 +348,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

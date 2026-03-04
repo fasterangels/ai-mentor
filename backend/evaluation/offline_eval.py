@@ -18,6 +18,8 @@ from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 from evaluation.reason_metrics import reason_metrics_for_report
 from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
 from evaluation.error_taxonomy import error_taxonomy_for_report
+from evaluation.reason_reliability import compute_reason_reliability
+from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
 
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
@@ -71,10 +73,15 @@ async def build_evaluation_report(
     reason_metrics_decisions: List[tuple] = []  # (market, reason_codes) per decision
     reason_failure_decisions: List[tuple] = []  # (market, outcome, reason_codes) per decision
     error_taxonomy_decisions: List[tuple] = []  # (market, outcome, confidence, reason_codes) per decision
+    would_refuse_decisions: List[DecisionRecord] = []
 
     for run, res in resolved:
         try:
-            mo = json.loads(res.market_outcomes_json) if isinstance(res.market_outcomes_json, str) else (res.market_outcomes_json or {})
+            mo = (
+                json.loads(res.market_outcomes_json)
+                if isinstance(res.market_outcomes_json, str)
+                else (res.market_outcomes_json or {})
+            )
         except (TypeError, ValueError):
             mo = {}
         for m in MARKETS:
@@ -88,7 +95,13 @@ async def build_evaluation_report(
 
         preds = await pred_repo.list_by_analysis_run(run.id)
         market_to_confidence: Dict[str, float] = {}
-        key_map = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng"}
+        key_map = {
+            "1X2": "one_x_two",
+            "OU25": "over_under_25",
+            "OU_2.5": "over_under_25",
+            "GGNG": "gg_ng",
+            "BTTS": "gg_ng",
+        }
         for p in preds:
             k = key_map.get((p.market or "").upper(), "")
             if k and k in MARKETS:
@@ -124,17 +137,30 @@ async def build_evaluation_report(
                         per_market_bands_fine[m][band_fine]["neutral_count"] += 1
 
         try:
-            reason_json = json.loads(res.reason_codes_by_market_json) if isinstance(res.reason_codes_by_market_json, str) else (res.reason_codes_by_market_json or {})
+            reason_json = (
+                json.loads(res.reason_codes_by_market_json)
+                if isinstance(res.reason_codes_by_market_json, str)
+                else (res.reason_codes_by_market_json or {})
+            )
         except (TypeError, ValueError):
             reason_json = {}
         for m in MARKETS:
             codes = reason_json.get(m) or []
             outcome = mo.get(m, "UNRESOLVED")
             conf = market_to_confidence.get(m)
-            reason_metrics_decisions.append((m, list(codes)))
-            reason_failure_decisions.append((m, outcome, list(codes)))
-            error_taxonomy_decisions.append((m, outcome, conf, list(codes)))
-            for code in codes:
+            codes_list = list(codes)
+            reason_metrics_decisions.append((m, codes_list))
+            reason_failure_decisions.append((m, outcome, codes_list))
+            error_taxonomy_decisions.append((m, outcome, conf, codes_list))
+            would_refuse_decisions.append(
+                DecisionRecord(
+                    market=m,
+                    outcome=outcome,
+                    confidence=conf,
+                    reason_codes=codes_list,
+                )
+            )
+            for code in codes_list:
                 if code not in reason_stats:
                     reason_stats[code] = {mm: {"success": 0, "failure": 0, "neutral": 0} for mm in MARKETS}
                 if m not in reason_stats[code]:
@@ -212,4 +238,14 @@ async def build_evaluation_report(
     report["error_taxonomy"] = et_block["error_taxonomy"]
     report.setdefault("meta", {})["error_taxonomy_version"] = et_block["meta"]["error_taxonomy_version"]
 
+    # Would-refuse simulator uses reason reliability derived from failure metrics
+    reason_reliability = compute_reason_reliability(report["reason_failure_metrics"])
+    wr_block = would_refuse_for_report(
+        would_refuse_decisions,
+        reason_reliability=reason_reliability,
+    )
+    report["would_refuse_metrics"] = wr_block["would_refuse_metrics"]
+    report.setdefault("meta", {})["would_refuse_version"] = wr_block["meta"]["would_refuse_version"]
+
     return report
+
