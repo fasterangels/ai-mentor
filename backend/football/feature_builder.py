@@ -18,6 +18,7 @@ from .schedule_fatigue import build_schedule_fatigue
 from .tactical_signals import build_tactical_signals
 from .team_intelligence import build_team_intelligence
 from .value_detector import compute_edges, to_reason_codes
+from .decision_engine import build_decision
 
 
 def build_features(
@@ -117,6 +118,9 @@ def build_features(
     value_signal = compute_edges(model_probs, implied_probs)
     meta["value_signal"] = value_signal.__dict__
     meta["value_reason_codes"] = to_reason_codes(value_signal)
+    decision = build_decision(payload_dict)
+    payload_dict["decision"] = decision.__dict__
+    meta["decision"] = decision.__dict__
     if live_data is not None:
         live_probs = update_live_probability(
             meta["model_prediction"],
