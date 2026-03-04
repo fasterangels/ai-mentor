@@ -20,6 +20,7 @@ from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
 from evaluation.error_taxonomy import error_taxonomy_for_report
 from evaluation.reason_reliability import compute_reason_reliability
 from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
+from evaluation.decision_engine_eval import evaluate_decision_engine
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -73,6 +74,7 @@ async def build_evaluation_report(
     reason_failure_decisions: List[tuple] = []  # (market, outcome, reason_codes) per decision
     error_taxonomy_decisions: List[tuple] = []  # (market, outcome, confidence, reason_codes) per decision
     would_refuse_decisions: List[DecisionRecord] = []
+    decision_engine_predictions: List[Dict[str, Any]] = []
 
     for run, res in resolved:
         try:
@@ -159,6 +161,17 @@ async def build_evaluation_report(
                     reason_codes=codes_list,
                 )
             )
+            # Synthetic decision_engine prediction record for this market decision.
+            decision_engine_predictions.append(
+                {
+                    "id": getattr(run, "id", None),
+                    "market": m,
+                    "confidence": conf,
+                    "reason_codes": codes_list,
+                    # TODO: if we later compute reason_conflicts, populate here.
+                    "reason_conflicts": False,
+                }
+            )
             for code in codes_list:
                 if code not in reason_stats:
                     reason_stats[code] = {mm: {"success": 0, "failure": 0, "neutral": 0} for mm in MARKETS}
@@ -238,15 +251,42 @@ async def build_evaluation_report(
     report.setdefault("meta", {})["error_taxonomy_version"] = et_block["meta"]["error_taxonomy_version"]
 
     # Would-refuse simulator uses reason reliability; prefer existing block if present
-    reason_reliability = report.get("reason_reliability")
-    if not isinstance(reason_reliability, dict) or not reason_reliability:
-        reason_reliability = compute_reason_reliability(report["reason_failure_metrics"])
+    reason_reliability_reason_centric = report.get("reason_reliability")
+    if not isinstance(reason_reliability_reason_centric, dict) or not reason_reliability_reason_centric:
+        reason_reliability_reason_centric = compute_reason_reliability(report["reason_failure_metrics"])
 
     wr_block = would_refuse_for_report(
         would_refuse_decisions,
-        reason_reliability=reason_reliability,
+        reason_reliability=reason_reliability_reason_centric,
     )
     report["would_refuse_metrics"] = wr_block["would_refuse_metrics"]
     report.setdefault("meta", {})["would_refuse_version"] = wr_block["meta"]["would_refuse_version"]
+
+    # Build a reason_reliability view suitable for the decision engine:
+    #   global: {reason: reliability}
+    #   per_market: {market: {reason: reliability}}
+    rr_global: Dict[str, float] = {}
+    rr_per_market: Dict[str, Dict[str, float]] = {}
+    for reason, entry in (reason_reliability_reason_centric or {}).items():
+        g = entry.get("global") or {}
+        rel_g = g.get("reliability")
+        if isinstance(rel_g, (int, float)):
+            rr_global[reason] = float(rel_g)
+        for market, m_stats in (entry.get("per_market") or {}).items():
+            rel_m = m_stats.get("reliability")
+            if isinstance(rel_m, (int, float)):
+                rr_per_market.setdefault(market, {})[reason] = float(rel_m)
+
+    reason_reliability_for_engine = {
+        "global": rr_global,
+        "per_market": rr_per_market,
+    }
+
+    de_metrics = evaluate_decision_engine(
+        decision_engine_predictions,
+        reason_reliability_for_engine,
+    )
+    report["decision_engine_metrics"] = de_metrics
+    report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
 
     return report
