@@ -1,0 +1,8 @@
+{
+  "version": "v0",
+  "policy_path": "backend/policies/decision_engine_policy.json",
+  "calibrator_path": "backend/calibration/confidence_calibrator.json",
+  "reliability_window": "90d",
+  "meta": {}
+}
+
