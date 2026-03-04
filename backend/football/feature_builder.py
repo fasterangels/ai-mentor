@@ -5,6 +5,7 @@ from typing import Any
 from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
 from .odds_intelligence import build_odds_intelligence
+from .prediction_model import build_prediction
 from .team_intelligence import build_team_intelligence
 
 
@@ -54,6 +55,9 @@ def build_features(
         },
         "odds_intelligence": odds_intel.__dict__,
     }
+    payload_dict = {"meta": meta}
+    prediction = build_prediction(payload_dict)
+    meta["model_prediction"] = prediction.__dict__
 
     return FootballFeatures(
         match=match,
