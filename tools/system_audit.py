@@ -229,6 +229,13 @@ def main() -> int:
     checks = [determinism, eval_metrics, artifact, metrics_sanity]
     all_pass = all(c.get("status") == "PASS" for c in checks)
 
+    # Extract baseline_hash for summary (if present in evaluation report meta)
+    baseline_hash = None
+    meta = eval_report.get("meta") or {}
+    baseline = meta.get("baseline") or {}
+    if isinstance(baseline, dict):
+        baseline_hash = baseline.get("baseline_hash")
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_path = reports_root / f"system_audit_{timestamp}.json"
 
@@ -236,6 +243,7 @@ def main() -> int:
         "system_audit": {
             "commit": commit,
             "branch": branch,
+            "baseline_hash": baseline_hash,
             "python": python_info,
             "requirements_snapshot": requirements,
             "tests_passed": all_pass,
@@ -251,7 +259,7 @@ def main() -> int:
         json.dump(report, f, indent=2, sort_keys=True)
 
     print(str(out_path), file=sys.stderr)
-    return 0
+    return 0 if all_pass else 1
 
 
 if __name__ == "__main__":

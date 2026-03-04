@@ -29,12 +29,65 @@ jobs:
         run: |
           python -m pytest backend/tests/ -v | tee pytest-log.txt
 
+      - name: Run full system audit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m tools.system_audit
+
       - name: Upload pytest log artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-pytest-logs
           path: pytest-log.txt
+
+      - name: Upload system audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-audit-report
+          path: reports/system_audit/system_audit_*.json
+
+      - name: System audit summary
+        if: always()
+        run: |
+          latest=$(ls -t reports/system_audit/system_audit_*.json 2>/dev/null | head -n 1 || echo "")
+          if [ -z "$latest\" ]; then
+            echo "## System Audit" >> "$GITHUB_STEP_SUMMARY"
+            echo "No system audit report found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python - "$latest" "$GITHUB_STEP_SUMMARY" << 'PY'
+import json, sys
+report_path, summary_path = sys.argv[1], sys.argv[2]
+data = json.load(open(report_path, encoding="utf-8"))
+sa = data.get("system_audit", {})
+commit = sa.get("commit") or ""
+overall = sa.get("overall_status") or "UNKNOWN"
+baseline_hash = sa.get("baseline_hash") or ""
+
+det = (sa.get("determinism_check") or {}).get("status")
+eval_status = (sa.get("evaluation_metrics_present") or {}).get("status")
+artifact_status = (sa.get("artifact_integrity") or {}).get("status")
+metrics_status = (sa.get("metrics_sanity") or {}).get("status")
+
+lines = []
+lines.append("## System Audit")
+lines.append(f"- Overall: **{overall}**")
+if commit:
+    lines.append(f"- Commit: `{commit}`")
+if baseline_hash:
+    lines.append(f"- Baseline hash: `{baseline_hash}`")
+lines.append("- Checks:")
+lines.append(f"  - Determinism: **{det}**")
+lines.append(f"  - Evaluation metrics: **{eval_status}**")
+lines.append(f"  - Artifact integrity: **{artifact_status}**")
+lines.append(f"  - Metrics sanity: **{metrics_status}**")
+
+with open(summary_path, "a", encoding="utf-8") as f:
+    f.write("\\n".join(lines) + "\\n")
+PY
 
   frontend-checks:
     runs-on: ubuntu-latest
