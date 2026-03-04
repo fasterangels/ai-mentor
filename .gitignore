@@ -60,6 +60,9 @@ build/
 Thumbs.db
 desktop.ini
 
+# Runtime data (odds history, etc.)
+backend/runtime/
+
 # Logs
 *.log
 logs/

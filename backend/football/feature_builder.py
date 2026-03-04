@@ -6,6 +6,7 @@ from .models import FootballFeatures, asdict_deep
 from .providers import FootballOddsProvider, FootballStatsProvider
 from .injury_impact import build_injury_impact
 from .lineup_strength import build_lineup_strength
+from .market_movement import update_and_analyze
 from .odds_intelligence import build_odds_intelligence
 from .prediction_model import build_prediction
 from .schedule_fatigue import build_schedule_fatigue
@@ -53,6 +54,7 @@ def build_features(
 
     odds_quotes = odds.get_odds(match_id)
     odds_intel = build_odds_intelligence(odds_quotes)
+    movement = update_and_analyze(match_id, odds_quotes)
 
     meta = {
         "stats_provider": getattr(stats, "name", type(stats).__name__),
@@ -80,6 +82,13 @@ def build_features(
         "schedule_fatigue": {
             "home": home_fatigue.__dict__,
             "away": away_fatigue.__dict__,
+        },
+        "market_movement": {
+            "has_history": movement.has_history,
+            "points": movement.points,
+            "movement": movement.movement,
+            "volatility": movement.volatility,
+            "direction": movement.direction,
         },
     }
     payload_dict = {"meta": meta}
