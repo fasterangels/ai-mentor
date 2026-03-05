@@ -4,8 +4,8 @@
   "version": "0.3.9",
   "identifier": "com.ai.mentor.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "node scripts/inject-build-env.js",
+    "beforeDevCommand": "python ../../backend/runner/start_backend.py && npm run dev",
+    "beforeBuildCommand": "python ../../backend/runner/start_backend.py && node scripts/inject-build-env.js",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../dist"
   },
