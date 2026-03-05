@@ -3,6 +3,8 @@
 
 use std::fs;
 use std::net::TcpListener;
+use std::process::Command;
+use std::thread;
 use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 use std::io::Write;
@@ -423,6 +425,33 @@ fn open_logs_folder() -> Result<(), String> {
   Ok(())
 }
 
+/// Start the Python backend (dev path) and block until /health returns success or timeout.
+fn start_backend_and_wait() {
+  let _child = Command::new("python")
+    .arg("../../backend/runner/start_backend.py")
+    .spawn();
+
+  let client = match reqwest::blocking::Client::builder()
+    .timeout(Duration::from_secs(2))
+    .build()
+  {
+    Ok(c) => c,
+    Err(_) => return,
+  };
+
+  for _ in 0..40 {
+    if let Ok(resp) = client.get(HEALTH_URL).send() {
+      if resp.status().is_success() {
+        app_log("Backend ready (health-check)");
+        return;
+      }
+    }
+    thread::sleep(Duration::from_millis(250));
+  }
+
+  app_log("Backend did not respond in time (health-check)");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   if let Err(e) = try_single_instance() {
@@ -438,6 +467,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .manage(backend_state.clone())
     .setup(|app| {
+      start_backend_and_wait();
       let build_id = std::env!("BUILD_ID");
       app_log(&format!("BUILD_ID={}", build_id));
       let exe_path = std::env::current_exe().unwrap_or_default();
