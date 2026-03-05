@@ -23,13 +23,14 @@
   "plugins": {
     "updater": {
       "active": true,
-      "endpoints": ["https://github.com/<OWNER>/<REPO>/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/fasterangels/ai-mentor/releases/latest/download/latest.json"],
       "dialog": false,
-      "pubkey": "<PUBLIC_KEY_PLACEHOLDER>"
+      "pubkey": "REPLACE_WITH_PUBLIC_KEY_AFTER_tauri_signer_generate"
     }
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["msi", "nsis"],
     "icon": ["icons/app.ico"],
     "resources": ["bin/ai-mentor-backend.exe", "bin/launch_backend.cmd"],

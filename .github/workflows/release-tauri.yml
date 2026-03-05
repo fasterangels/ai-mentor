@@ -1,0 +1,105 @@
+name: release-tauri
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.10); required when run manually"
+        required: true
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: choco install nsis -y
+      - run: python -m pip install -U pip && pip install -r backend/requirements.txt
+      - name: Install frontend deps
+        working-directory: app/frontend
+        run: npm ci
+      - name: Setup PyInstaller
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pyinstaller
+      - name: Build backend exe
+        run: |
+          if not exist packaging\artifacts mkdir packaging\artifacts
+          python -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+          if not exist app\frontend\src-tauri\bin mkdir app\frontend\src-tauri\bin
+      - name: Copy backend to Tauri bin
+        shell: pwsh
+        run: |
+          $src = Join-Path $env:GITHUB_WORKSPACE "dist\ai-mentor-backend.exe"
+          $bin = Join-Path $env:GITHUB_WORKSPACE "app\frontend\src-tauri\bin"
+          if (!(Test-Path $src)) { throw "Missing $src" }
+          Copy-Item $src (Join-Path $bin "ai-mentor-backend.exe") -Force
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE "packaging\windows_task\launch_backend.cmd") (Join-Path $bin "launch_backend.cmd") -Force
+      - name: Build frontend
+        working-directory: app/frontend
+        run: npm run build
+      - name: Build Tauri (signed)
+        working-directory: app/frontend
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build
+      - name: Set version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          $ver = if ($tag -match '^v(.+)$') { $Matches[1] } else { "0.0.0" }
+          echo "ver=$ver" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+      - name: Collect NSIS and sig
+        id: collect
+        if: success()
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.ver }}"
+          $art = Join-Path $env:GITHUB_WORKSPACE "packaging/artifacts"
+          if (-not (Test-Path $art)) { New-Item $art -ItemType Directory -Force | Out-Null }
+          $nsis = Get-ChildItem $env:GITHUB_WORKSPACE -Recurse -Filter *.exe -File | Where-Object { $_.FullName -match '\\target\\release\\bundle\\nsis\\' } | Select-Object -First 1
+          $sig = Get-ChildItem $env:GITHUB_WORKSPACE -Recurse -Filter *.sig -File | Where-Object { $_.FullName -match '\\target\\release\\bundle\\nsis\\' } | Select-Object -First 1
+          if (-not $nsis -or -not $sig) { Write-Error "NSIS exe or sig not found"; exit 1 }
+          Copy-Item $nsis.FullName (Join-Path $art "AI-Mentor-$ver-x64-setup.exe") -Force
+          Copy-Item $sig.FullName (Join-Path $art "AI-Mentor-$ver-x64-setup.exe.sig") -Force
+          echo "nsis_sig_path=$(Join-Path $art "AI-Mentor-$ver-x64-setup.exe.sig")" >> $env:GITHUB_OUTPUT
+      - name: Generate latest.json
+        if: success()
+        working-directory: app/frontend
+        env:
+          VER: ${{ steps.version.outputs.ver }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SIG_PATH: ${{ steps.collect.outputs.nsis_sig_path }}
+        shell: pwsh
+        run: node scripts/generate-latest-json.js --version $env:VER --tag $env:TAG --nsis-sig $env:SIG_PATH --out "$env:GITHUB_WORKSPACE\packaging\artifacts\latest.json"
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          replace_assets: true
+          files: |
+            packaging/artifacts/AI-Mentor-${{ steps.version.outputs.ver }}-x64-setup.exe
+            packaging/artifacts/latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
