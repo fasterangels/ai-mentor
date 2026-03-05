@@ -16,9 +16,10 @@ from .quality import assess_quality
 from .sources.registry import fetch as fetch_source
 from .types import DomainData, EvidencePack, PipelineInput, PipelineResult
 
-# Future source kinds (not yet called from pipeline): odds, injuries, lineups.
+# Future source kinds (not yet called from pipeline): odds, injuries, lineups, head_to_head, recent_form.
 # When added, register sources in backend/pipeline/sources/__init__.py and call
-# fetch_source("odds", query) / fetch_source("injuries", query) / fetch_source("lineups", query) as needed.
+# fetch_source("odds", query) / fetch_source("injuries", query) / fetch_source("lineups", query)
+# / fetch_source("head_to_head", query) / fetch_source("recent_form", query) as needed.
 
 
 def _merged_to_normalized(merged: Dict[str, Any], domain: str) -> Dict[str, Any]:
@@ -177,6 +178,32 @@ async def run_pipeline(
 
         # Step 6: Build consensus
         domain_data = build_consensus(payloads, quality_report, domain)
+
+        # Enrich fixtures with normalized team/league identifiers using the team registry.
+        if domain == "fixtures":
+            from services import team_registry  # Local import to avoid circular imports at module import time.
+
+            data = dict(domain_data.data)
+            home_name = data.get("home_team")
+            away_name = data.get("away_team")
+            league_name = data.get("competition")
+
+            home_team = team_registry.resolve_team(home_name) if home_name else None
+            away_team = team_registry.resolve_team(away_name) if away_name else None
+            league = team_registry.resolve_league(league_name) if league_name else None
+
+            if home_team is not None:
+                data["home_team_id"] = home_team.get("id")
+            if away_team is not None:
+                data["away_team_id"] = away_team.get("id")
+            if league is not None:
+                data["league_id"] = league.get("id")
+
+            domain_data = DomainData(
+                data=data,
+                quality=domain_data.quality,
+                sources=domain_data.sources,
+            )
 
         if quality_report.passed:
             any_domain_ok = True
