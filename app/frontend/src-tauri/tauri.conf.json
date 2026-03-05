@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "identifier": "com.aimentor.app",
   "build": {
-    "beforeDevCommand": "python ../../backend/runner/start_backend.py && npm run dev",
-    "beforeBuildCommand": "python ../../backend/runner/start_backend.py && node scripts/inject-build-env.js",
+    "beforeDevCommand": "node scripts/inject-build-env.js",
+    "beforeBuildCommand": "node scripts/inject-build-env.js",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../dist"
   },
