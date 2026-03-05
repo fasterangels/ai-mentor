@@ -57,7 +57,13 @@ app = FastAPI(title=settings.app_name)
 
 # CORS: single source of truth — defined here only, before any routers. OPTIONS preflight handled by CORSMiddleware.
 ALLOWED_ORIGINS = [
+    "tauri://localhost",
     "http://tauri.localhost",
+    "https://tauri.localhost",
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
@@ -65,9 +71,9 @@ ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=False,
 )
 
 app.include_router(api_v1_router)
@@ -77,7 +83,7 @@ app.include_router(api_v1_router)
 async def on_startup() -> None:
     """Application startup hook."""
     await init_database(settings.database_url)
-    logger.info("FastAPI app from %s: CORS allow_origins=%s allow_credentials=%s", __file__, ALLOWED_ORIGINS, False)
+    logger.info("FastAPI app from %s: CORS allow_origins=%s allow_credentials=%s", __file__, ALLOWED_ORIGINS, True)
     logger.info("Application startup complete")
 
 
