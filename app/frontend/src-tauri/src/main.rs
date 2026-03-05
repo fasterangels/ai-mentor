@@ -4,15 +4,78 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command},
     thread::sleep,
     time::{Duration, Instant},
 };
 
+fn spawn_packaged_backend(exe_dir: &Path) -> Option<Child> {
+    let sidecar = exe_dir.join("ai-mentor-backend.exe");
+    if sidecar.exists() {
+        println!("Starting packaged backend exe: {:?}", sidecar);
+        return Command::new(&sidecar)
+            .spawn()
+            .map_err(|e| {
+                eprintln!("Failed to spawn packaged backend exe: {e}");
+                e
+            })
+            .ok();
+    }
+    None
+}
+
+fn spawn_python_backend(repo_root: &Path) -> Option<Child> {
+    let script = repo_root
+        .join("backend")
+        .join("runner")
+        .join("start_backend.py");
+    if !script.exists() {
+        eprintln!("Backend runner script not found at {:?}", script);
+        return None;
+    }
+
+    println!(
+        "Starting backend from Tauri via Python (script: {:?})...",
+        script
+    );
+
+    let backend_path = repo_root.join("backend");
+
+    let make_cmd = |python_cmd: &str| {
+        let mut cmd = Command::new(python_cmd);
+        cmd.arg(&script).current_dir(repo_root).env("PYTHONUNBUFFERED", "1");
+        if backend_path.exists() {
+            cmd.env("PYTHONPATH", &backend_path);
+        }
+        cmd.spawn()
+    };
+
+    match make_cmd("python") {
+        Ok(child) => Some(child),
+        Err(e) => {
+            eprintln!("Failed to spawn backend with 'python': {e}");
+            match make_cmd("python3") {
+                Ok(child) => Some(child),
+                Err(e2) => {
+                    eprintln!("Failed to spawn backend with 'python3': {e2}");
+                    None
+                }
+            }
+        }
+    }
+}
+
 fn spawn_backend() -> Option<Child> {
-    // Resolve repository root relative to the current executable.
     let exe_path = std::env::current_exe().ok()?;
+    let exe_dir = exe_path.parent()?;
+
+    // 1) Prefer packaged sidecar exe in release/installed builds.
+    if let Some(child) = spawn_packaged_backend(exe_dir) {
+        return Some(child);
+    }
+
+    // 2) Fallback to Python runner script (dev or when repo tree is present).
     let repo_root: PathBuf = exe_path
         .parent() // .../target/{debug,release}
         .and_then(|p| p.parent()) // .../src-tauri
@@ -20,27 +83,7 @@ fn spawn_backend() -> Option<Child> {
         .and_then(|p| p.parent()) // repo root
         .map(|p| p.to_path_buf())?;
 
-    let script = repo_root
-        .join("backend")
-        .join("runner")
-        .join("start_backend.py");
-
-    println!(
-        "Starting backend from Tauri (script: {:?})...",
-        script
-    );
-
-    let child = Command::new("python")
-        .arg(script)
-        .current_dir(&repo_root)
-        .spawn()
-        .map_err(|e| {
-            eprintln!("Failed to spawn backend: {e}");
-            e
-        })
-        .ok()?;
-
-    Some(child)
+    spawn_python_backend(&repo_root)
 }
 
 fn backend_healthy() -> bool {
@@ -71,7 +114,7 @@ fn wait_for_backend_ready(timeout: Duration) -> bool {
             println!("Backend health check succeeded.");
             return true;
         }
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(250));
     }
     false
 }
