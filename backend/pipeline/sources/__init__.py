@@ -7,6 +7,7 @@ from .stub_stats import StubStatsSource
 from .football_data_api import FootballDataAPISource
 from .odds_api_source import OddsAPISource
 from .injuries_lineups_source import InjuriesLineupsSource
+from .head_to_head_source import HeadToHeadSource
 
 _reg = get_registry()
 _reg.register(StubFixturesSource())
@@ -14,6 +15,7 @@ _reg.register(StubStatsSource())
 _reg.register(FootballDataAPISource())
 _reg.register(OddsAPISource())
 _reg.register(InjuriesLineupsSource())
+_reg.register(HeadToHeadSource())
 
 __all__ = [
     "BaseSource",
@@ -24,6 +26,7 @@ __all__ = [
     "FootballDataAPISource",
     "OddsAPISource",
     "InjuriesLineupsSource",
+    "HeadToHeadSource",
     "fetch",
     "get_registry",
 ]
