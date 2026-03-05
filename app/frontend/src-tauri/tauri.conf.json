@@ -20,6 +20,14 @@
       }
     ]
   },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": ["https://github.com/<OWNER>/<REPO>/releases/latest/download/latest.json"],
+      "dialog": false,
+      "pubkey": "<PUBLIC_KEY_PLACEHOLDER>"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],

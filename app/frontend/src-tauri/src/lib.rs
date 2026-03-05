@@ -4,6 +4,7 @@
 use std::fs;
 use std::net::TcpListener;
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -434,6 +435,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .manage(backend_state.clone())
     .setup(|app| {
       let build_id = std::env!("BUILD_ID");
@@ -463,6 +465,19 @@ pub fn run() {
           }
         }
       }
+
+      // Silent auto-updater: check on startup, download/install if available (no UI, no block).
+      let handle = app.handle().clone();
+      tauri::async_runtime::spawn(async move {
+        if let Ok(updater) = handle.updater() {
+          if let Ok(Some(update)) = updater.check().await {
+            let _ = update
+              .download_and_install(|_chunk, _total| {}, || {})
+              .await;
+            let _ = handle.restart();
+          }
+        }
+      });
 
       Ok(())
     })
