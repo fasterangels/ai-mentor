@@ -215,6 +215,8 @@ export const en: Record<string, string> = {
   "backend.status_ready": "Ready",
   "backend.status_starting": "Starting…",
   "backend.status_not_ready": "Not ready",
+  "backend.online": "Backend: Online",
+  "backend.offline": "Backend: Offline",
   "analysis.shadow_pipeline_hint": "Runs Shadow Pipeline via /pipeline/shadow/run.",
   "analysis.home_team_placeholder": "Home team",
   "analysis.away_placeholder": "Away team",

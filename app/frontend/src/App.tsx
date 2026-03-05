@@ -642,10 +642,37 @@ function App() {
       .catch(() => setApiBase(DEFAULT_API_BASE));
   }, []);
 
-  // Desktop hardening: health check with backoff (1s, 2s, 4s; max 3). Non-blocking; Analyze disabled until ready.
-  const healthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tauri: on startup ensure backend is running via invoke, then set status. Reuse existing error card if ensure fails.
   useEffect(() => {
     if (!isTauri()) return;
+    let cancelled = false;
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke("ensure_backend_running").then(() => invoke<string>("backend_health"))
+      )
+      .then(() => {
+        if (!cancelled) {
+          setBackendReady(true);
+          setBackendStatus("READY");
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setBackendReady(false);
+          setBackendStatus("NOT_READY");
+          const msg = e instanceof Error ? e.message : String(e);
+          setToast({ id: "backend-start", kind: "error", message: msg || t("backend.not_ready_message") });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Desktop (non-Tauri): health check with backoff (1s, 2s, 4s; max 3). Non-blocking; Analyze disabled until ready.
+  const healthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isTauri()) return;
     const delays = [1000, 2000, 4000];
     let cancelled = false;
     const base = DEFAULT_API_BASE;
@@ -694,6 +721,33 @@ function App() {
     return () => {
       cancelled = true;
       clearInterval(id);
+    };
+  }, []);
+
+  // Tauri: periodic health check every 20s to keep status indicator accurate.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    const intervalId = setInterval(() => {
+      if (cancelled) return;
+      import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke<string>("backend_health"))
+        .then(() => {
+          if (!cancelled) {
+            setBackendReady(true);
+            setBackendStatus("READY");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBackendReady(false);
+            setBackendStatus("NOT_READY");
+          }
+        });
+    }, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -1612,11 +1666,13 @@ function App() {
         showSearchInTopbar={view !== "HOME"}
         showStatusInTopbar={view !== "HOME"}
         statusLabel={
-          isTauri() && backendStatus?.startsWith("NOT_READY")
-            ? t("backend.status_not_ready")
-            : backendReady
-              ? t("topbar.status_ready")
-              : t("topbar.status_starting")
+          isTauri()
+            ? (backendReady ? t("backend.online") : t("backend.offline"))
+            : backendStatus?.startsWith("NOT_READY")
+              ? t("backend.status_not_ready")
+              : backendReady
+                ? t("topbar.status_ready")
+                : t("topbar.status_starting")
         }
       >
         {view === "HOME" && <HomeScreen onNavigate={setView} />}
