@@ -12,10 +12,22 @@ import type {
 
 export type { ShadowPipelineRequest, ShadowPipelineReport };
 
-/** Run shadow pipeline (single supported flow). In Tauri, uses invoke to bypass CORS. */
+/** Run shadow pipeline (single supported flow). In Tauri, uses invoke to bypass fetch/CORS. */
 export async function runShadowPipeline(
   body: ShadowPipelineRequest
 ): Promise<ShadowPipelineReport> {
+  if (typeof window !== "undefined" && "__TAURI__" in window) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const responseText = await invoke<string>("run_shadow_pipeline");
+    let data: ShadowPipelineReport;
+    try {
+      data = JSON.parse(responseText) as ShadowPipelineReport;
+    } catch (e) {
+      throw new Error("Backend returned non-JSON response: " + responseText);
+    }
+    return data;
+  }
+
   const payload = {
     connector_name: body.connector_name ?? "sample_platform",
     match_id: body.match_id,
@@ -23,11 +35,6 @@ export async function runShadowPipeline(
     final_away_goals: body.final_away_goals ?? 0,
     status: body.status ?? "FINAL",
   };
-
-  if (typeof window !== "undefined" && "__TAURI__" in window) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return (await invoke("shadow_run", { payload })) as ShadowPipelineReport;
-  }
   return apiPost<ShadowPipelineReport>("/api/v1/pipeline/shadow/run", payload);
 }
 
