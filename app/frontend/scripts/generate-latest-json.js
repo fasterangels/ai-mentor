@@ -1,4 +1,5 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
+/** Deterministic updater manifest: reads NSIS .sig and writes latest.json for Tauri auto-update. */
 const fs = require('fs');
 const args = process.argv.slice(2);
 function getArg(name) {

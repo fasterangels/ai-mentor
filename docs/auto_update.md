@@ -13,7 +13,7 @@ This document describes how to set up and release updates for the AI Mentor desk
 
    ```bash
    cd app/frontend
-   pnpm exec tauri signer generate -w ~/.tauri/ai-mentor.key
+   pnpm exec tauri signer generate --write-keys ~/.tauri/ai-mentor.key
    ```
 
    This creates:
@@ -59,7 +59,7 @@ To produce `latest.json` from built artifacts (e.g. for testing or local validat
 
 ```bash
 cd app/frontend
-node scripts/generate-latest-json.js --version 0.3.9 --nsis path/to/installer.exe --nsis-sig path/to/installer.exe.sig --out latest.json
+node scripts/generate-latest-json.js --version 0.3.9 --tag v0.3.9 --nsis-sig path/to/AI-Mentor-0.3.9-x64-setup.exe.sig --out latest.json
 ```
 
-See `app/frontend/scripts/generate-latest-json.js` for the exact arguments. The script is deterministic given the same inputs.
+See `app/frontend/scripts/generate-latest-json.js` for the exact arguments (`--version`, `--tag`, `--nsis-sig`, `--out`). The script is deterministic given the same inputs.
