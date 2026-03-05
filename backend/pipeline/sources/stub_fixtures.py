@@ -7,25 +7,32 @@ from .base import BaseSource
 
 
 class StubFixturesSource(BaseSource):
-    """Stub implementation for fixtures data source.
+    """Stub fixtures: implements Source for registry and BaseSource for legacy pipeline."""
 
-    Returns deterministic mock data for testing/development.
-    """
+    _PRIORITY = 10
 
     @property
     def source_name(self) -> str:
         return "stub_fixtures"
 
     @property
+    def name(self) -> str:
+        return self.source_name
+
+    @property
+    def priority(self) -> int:
+        return self._PRIORITY
+
+    @property
     def domain(self) -> str:
         return "fixtures"
 
-    async def fetch(
-        self, match_id: str, window_hours: int
-    ) -> Dict[str, Any]:
-        """Return deterministic stub fixtures data."""
-        # Deterministic mock data based on match_id
-        # TODO: Replace with real source integration
+    def supports(self, kind: str) -> bool:
+        return kind == "fixtures"
+
+    def fetch(self, kind: str, query: Dict[str, Any]) -> Dict[str, Any]:
+        """Sync fetch for registry (Source protocol)."""
+        match_id = query.get("match_id", "")
         return {
             "data": {
                 "match_id": match_id,
@@ -39,3 +46,9 @@ class StubFixturesSource(BaseSource):
             "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
             "source_confidence": 0.9,
         }
+
+    async def fetch_match(
+        self, match_id: str, window_hours: int
+    ) -> Dict[str, Any]:
+        """Legacy async fetch for pipeline."""
+        return self.fetch("fixtures", {"match_id": match_id, "window_hours": window_hours})

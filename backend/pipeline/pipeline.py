@@ -55,7 +55,7 @@ async def _fetch_from_sources(
     for source in sources:
         try:
             start_time = datetime.now(timezone.utc)
-            raw_payload = await source.fetch(match_id, window_hours)
+            raw_payload = await source.fetch_match(match_id, window_hours)
             latency_ms = int(
                 (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
             )
