@@ -15,6 +15,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+mod backend_manager;
+
 const LOCK_FILE_NAME: &str = "app.lock";
 const APP_LOG_NAME: &str = "app.log";
 const BACKEND_AUTOSTART_LOG_NAME: &str = "backend_autostart.log";
@@ -461,6 +463,24 @@ fn open_logs_folder() -> Result<(), String> {
   Ok(())
 }
 
+/// Tauri command: ensure backend is running (start if needed, wait for health).
+#[tauri::command]
+fn ensure_backend_running() -> Result<(), String> {
+  backend_manager::start_backend_if_needed()
+}
+
+/// Tauri command: return /health response body as string, or error status.
+#[tauri::command]
+fn backend_health() -> Result<String, String> {
+  backend_manager::backend_health_response()
+}
+
+/// Tauri command: best-effort stop of the managed backend process.
+#[tauri::command]
+fn stop_backend() -> Result<(), String> {
+  backend_manager::stop_backend()
+}
+
 /// Start the Python backend (dev path) and block until /health returns success or timeout.
 fn start_backend_and_wait() {
   let _child = Command::new("python")
@@ -548,6 +568,9 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      ensure_backend_running,
+      backend_health,
+      stop_backend,
       run_shadow_pipeline,
       shadow_run,
       log_app_message,
