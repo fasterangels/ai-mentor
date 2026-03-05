@@ -5,5 +5,5 @@
   },
   "policy_path": "backend/policies/decision_engine_policy.json",
   "reliability_window": "90d",
-  "version": "v0_auto"
+  "version": "v0_auto_auto"
 }

@@ -13,27 +13,25 @@ from .cache import cache_payload, get_cached_payload
 from .consensus import build_consensus
 from .snapshot_envelope import build_envelope_for_recorded
 from .quality import assess_quality
-from .sources import BaseSource, StubFixturesSource, StubStatsSource
+from .sources.registry import fetch as fetch_source
 from .types import DomainData, EvidencePack, PipelineInput, PipelineResult
 
-
-# Registry of available sources by domain
-_SOURCE_REGISTRY: Dict[str, List[BaseSource]] = {
-    "fixtures": [StubFixturesSource()],
-    "stats": [StubStatsSource()],
-}
+# Future source kinds (not yet called from pipeline): odds, injuries, lineups.
+# When added, register sources in backend/pipeline/sources/__init__.py and call
+# fetch_source("odds", query) / fetch_source("injuries", query) / fetch_source("lineups", query) as needed.
 
 
-def _normalize_payload(
-    source: BaseSource, raw_payload: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Normalize raw payload into canonical structure."""
+def _merged_to_normalized(merged: Dict[str, Any], domain: str) -> Dict[str, Any]:
+    """Convert merged payload from multi-source fetch into one normalized payload for quality/consensus."""
+    meta = merged.get("meta") or {}
+    sources_list = meta.get("sources") or []
+    source_name = sources_list[0]["source_name"] if sources_list else "multi_source"
     return {
-        "source_name": source.source_name,
-        "domain": source.domain,
-        "data": raw_payload.get("data", {}),
-        "fetched_at_utc": raw_payload.get("fetched_at_utc", ""),
-        "source_confidence": raw_payload.get("source_confidence", 0.5),
+        "source_name": source_name,
+        "domain": domain,
+        "data": merged.get("data", {}),
+        "fetched_at_utc": merged.get("fetched_at_utc", ""),
+        "source_confidence": merged.get("source_confidence", 0.5),
     }
 
 
@@ -43,47 +41,6 @@ def _compute_payload_hash(payload: Dict[str, Any]) -> str:
     return hashlib.sha256(payload_str.encode()).hexdigest()[:16]
 
 
-async def _fetch_from_sources(
-    sources: List[BaseSource],
-    match_id: str,
-    window_hours: int,
-    fetch_log_repo: FetchLogRepository,
-) -> List[Dict[str, Any]]:
-    """Fetch data from multiple sources and normalize."""
-    normalized_payloads: List[Dict[str, Any]] = []
-
-    for source in sources:
-        try:
-            start_time = datetime.now(timezone.utc)
-            raw_payload = await source.fetch_match(match_id, window_hours)
-            latency_ms = int(
-                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-            )
-
-            normalized = _normalize_payload(source, raw_payload)
-            normalized_payloads.append(normalized)
-
-            # Log successful fetch
-            await fetch_log_repo.add_log(
-                source_name=source.source_name,
-                domain=source.domain,
-                status="success",
-                latency_ms=latency_ms,
-            )
-        except Exception as e:
-            # Log failed fetch
-            await fetch_log_repo.add_log(
-                source_name=source.source_name,
-                domain=source.domain,
-                status="error",
-                latency_ms=0,
-                notes=str(e),
-            )
-            # Continue with other sources
-
-    return normalized_payloads
-
-
 async def run_pipeline(
     session: AsyncSession, input_data: PipelineInput, *, dry_run: bool = False
 ) -> PipelineResult:
@@ -91,7 +48,7 @@ async def run_pipeline(
 
     Steps:
     1. Check cache (unless force_refresh)
-    2. Fetch from stub sources
+    2. Fetch from multi-source registry (fixtures/stats via stubs)
     3. Normalize payloads
     4. Run quality gates
     5. Build consensus
@@ -133,9 +90,20 @@ async def run_pipeline(
         if input_data.force_refresh:
             notes.append(f"CACHE_BYPASS_FORCE_REFRESH:{domain}")
 
-        # Step 2: Fetch from sources
-        sources = _SOURCE_REGISTRY.get(domain, [])
-        if not sources:
+        # Step 2: Fetch from multi-source registry (fixtures/stats via stubs; cache used unless force_refresh)
+        query: Dict[str, Any] = {
+            "match_id": input_data.match_id,
+            "window_hours": input_data.window_hours,
+        }
+        if input_data.connector_name is not None:
+            query["connector"] = input_data.connector_name
+        merged = fetch_source(
+            domain,
+            query,
+            force_refresh=input_data.force_refresh,
+        )
+        meta_sources = (merged.get("meta") or {}).get("sources") or []
+        if not meta_sources and not merged.get("data"):
             notes.append(f"NO_SOURCES_AVAILABLE:{domain}")
             evidence_pack.domains[domain] = DomainData(
                 data={},
@@ -145,10 +113,7 @@ async def run_pipeline(
             all_domains_ok = False
             continue
 
-        payloads = await _fetch_from_sources(
-            sources, input_data.match_id, input_data.window_hours, fetch_log_repo
-        )
-
+        payloads = [_merged_to_normalized(merged, domain)]
         if not payloads:
             notes.append(f"NO_DATA_FETCHED:{domain}")
             evidence_pack.domains[domain] = DomainData(
@@ -159,7 +124,15 @@ async def run_pipeline(
             all_domains_ok = False
             continue
 
-        # Step 3: Normalize (already done in _fetch_from_sources)
+        if not dry_run:
+            await fetch_log_repo.add_log(
+                source_name=payloads[0].get("source_name", "multi_source"),
+                domain=domain,
+                status="success",
+                latency_ms=0,
+            )
+
+        # Step 3: Normalize (done via _merged_to_normalized above)
         # Step 4: Persist raw payloads with G2 envelope (skip when dry_run)
         if not dry_run:
             now = datetime.now(timezone.utc)

@@ -25,14 +25,20 @@ def get_registry() -> SourceRegistry:
     return _default_registry
 
 
-def fetch(kind: str, query: Dict[str, Any], cache_root: Path | None = None) -> Dict[str, Any]:
-    """Fetch merged payload for kind/query; use cache if valid, else fetch_all + merge + cache."""
+def fetch(
+    kind: str,
+    query: Dict[str, Any],
+    cache_root: Path | None = None,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Fetch merged payload for kind/query; use cache if valid (unless force_refresh), else fetch_all + merge + cache."""
     root = cache_root if cache_root is not None else _CACHE_ROOT
     ttl = get_cache_ttl_seconds()
     path = get_cache_path(root, kind, query)
-    cached = read_cached(path, ttl)
-    if cached is not None:
-        return cached
+    if not force_refresh:
+        cached = read_cached(path, ttl)
+        if cached is not None:
+            return cached
     reg = get_registry()
     results = reg.fetch_all(kind, query)
     merged = reg.merge_payloads(kind, results)

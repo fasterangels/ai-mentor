@@ -113,6 +113,7 @@ async def run_shadow_pipeline(
             domains=["fixtures", "stats"],
             window_hours=72,
             force_refresh=False,
+            connector_name=connector_name,
         )
         pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run or hard_block_persistence)
         evidence_pack = pipeline_result.evidence_pack
