@@ -12,7 +12,7 @@ import type {
 
 export type { ShadowPipelineRequest, ShadowPipelineReport };
 
-/** Run shadow pipeline (single supported flow). */
+/** Run shadow pipeline (single supported flow). In Tauri, uses invoke to bypass CORS. */
 export async function runShadowPipeline(
   body: ShadowPipelineRequest
 ): Promise<ShadowPipelineReport> {
@@ -23,6 +23,11 @@ export async function runShadowPipeline(
     final_away_goals: body.final_away_goals ?? 0,
     status: body.status ?? "FINAL",
   };
+
+  if (typeof window !== "undefined" && "__TAURI__" in window) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke("shadow_run", { payload })) as ShadowPipelineReport;
+  }
   return apiPost<ShadowPipelineReport>("/api/v1/pipeline/shadow/run", payload);
 }
 
