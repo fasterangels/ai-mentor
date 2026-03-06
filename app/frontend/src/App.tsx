@@ -614,6 +614,7 @@ function App() {
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
   const [backendStatus, setBackendStatus] = useState<string | null>(null);
+  const [pipelineLogs, setPipelineLogs] = useState<Array<{ stage: string; status: string; message: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bundleFileInputRef = useRef<HTMLInputElement>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1377,6 +1378,7 @@ function App() {
 
     try {
       const report = await runShadowPipeline(payload);
+      setPipelineLogs(Array.isArray(report.logs) ? report.logs : []);
       setHttpStatus(200);
       if (report.error) {
         setResult(null);
@@ -1422,6 +1424,7 @@ function App() {
 
   const clearResults = () => {
     setResult(null);
+    setPipelineLogs([]);
     setErrorMessage(null);
     setErrorKind(null);
     setHttpStatus(null);
@@ -1693,6 +1696,33 @@ function App() {
               <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
                 <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} onExport={handleExportResultSummary} />
               </div>
+              {pipelineLogs.length > 0 && (
+                <div className="ai-section ai-no-print">
+                  <div className="ai-card">
+                    <div className="ai-cardHeader"><div className="ai-cardTitle">{t("section.analysis_log")}</div></div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="ai-table" style={{ width: "100%", fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left" }}>Stage</th>
+                            <th style={{ textAlign: "left" }}>Status</th>
+                            <th style={{ textAlign: "left" }}>Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pipelineLogs.map((entry, i) => (
+                            <tr key={i}>
+                              <td>{entry.stage}</td>
+                              <td>{entry.status}</td>
+                              <td>{entry.message}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="ai-section ai-no-print">
                 <div className="ai-card">
                   <details>

@@ -83,6 +83,7 @@ export const el: Record<string, string> = {
   "section.decisions_controls": "Έλεγχοι Αποφάσεων",
   "section.import_bundle": "Εισαγωγή / Bundle",
   "section.snapshots": "Snapshots",
+  "section.analysis_log": "Analysis Log",
   "label.status": "Κατάσταση",
   "label.outcome": "Αποτέλεσμα",
   "label.home": "Γηπεδούχος",

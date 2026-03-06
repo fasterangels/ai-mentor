@@ -114,4 +114,6 @@ export interface ShadowPipelineReport {
   };
   error?: string;
   detail?: string;
+  /** Pipeline execution log entries (stage, status, message). */
+  logs?: Array<{ stage: string; status: string; message: string }>;
 }

@@ -73,6 +73,7 @@ async def run_shadow_pipeline(
     away = int(final_score.get("away", 0))
 
     t_start = log_pipeline_start(connector_name, match_id)
+    logs: List[Dict[str, str]] = []
     evidence_pack: Optional[EvidencePack] = None
 
     if connector_name in ("sample_platform", "stub_platform", "stub_live_platform"):
@@ -86,7 +87,7 @@ async def run_shadow_pipeline(
         if not adapter:
             log_guardrail_trigger("connector_not_found", f"{connector_name} not available or live IO not allowed")
             log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="CONNECTOR_NOT_FOUND")
-            return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed")
+            return _error_report("CONNECTOR_NOT_FOUND", f"{connector_name} not available or live IO not allowed", logs=[])
         # Record live IO metrics for stub_platform / stub_live_platform (not for recorded sample_platform)
         if connector_name in ("stub_platform", "stub_live_platform"):
             t0 = time.perf_counter()
@@ -97,12 +98,13 @@ async def run_shadow_pipeline(
         if not ingested:
             log_guardrail_trigger("no_fixture", f"No fixture found for match_id={match_id!r}")
             log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_FIXTURE")
-            return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}")
+            return _error_report("NO_FIXTURE", f"No fixture found for match_id={match_id!r}", logs=[])
         # Reuse same ensure logic for both connectors (same ingested data structure)
         await _ensure_sample_platform_match(session, ingested, now)
         evidence_pack = ingested_to_evidence_pack(ingested, captured_at_utc=now)
         source = "recorded" if connector_name == "sample_platform" else "live"
         log_ingestion_source(connector_name, source, match_id)
+        logs.append({"stage": "ingestion", "status": "completed", "message": "Match data collected"})
     else:
         if connector_name == "dummy":
             await _ensure_dummy_match(session, match_id, now)
@@ -118,11 +120,12 @@ async def run_shadow_pipeline(
         pipeline_result = await run_pipeline(session, pipeline_input, dry_run=dry_run or hard_block_persistence)
         evidence_pack = pipeline_result.evidence_pack
         log_ingestion_source(connector_name, "recorded", match_id)
+        logs.append({"stage": "ingestion", "status": "completed", "message": "Match data collected"})
 
     if not evidence_pack:
         log_guardrail_trigger("no_evidence_pack", "Pipeline returned no evidence pack")
         log_pipeline_end(connector_name, match_id, time.perf_counter() - t_start, error="NO_EVIDENCE_PACK")
-        return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack")
+        return _error_report("NO_EVIDENCE_PACK", "Pipeline returned no evidence pack", logs=logs)
 
     # Optional: ingest recorded evidence items (schema v1) if file exists; does not affect analysis
     try:
@@ -154,6 +157,7 @@ async def run_shadow_pipeline(
     current_policy = get_active_policy()
     min_conf = min_confidence_from_policy(current_policy)
     analyzer_payload = analyze_v2("RESOLVED", evidence_pack, MARKETS_V2, min_confidence=min_conf)
+    logs.append({"stage": "decision", "status": "completed", "message": "Decision model resolved"})
 
     # 2.5) Check activation gate for each decision
     activation_audits: List[Dict[str, Any]] = []
@@ -304,6 +308,7 @@ async def run_shadow_pipeline(
             accuracy_by_market[m] = acc
     log_evaluation_summary(match_count, resolved_count, accuracy_by_market if accuracy_by_market else None)
     evaluation_report_checksum = checksum_report(eval_report)
+    logs.append({"stage": "evaluation", "status": "completed", "message": "Statistical models executed"})
 
     # 6) Tuner (shadow)
     proposal: PolicyProposal = run_tuner(eval_report)
@@ -316,6 +321,7 @@ async def run_shadow_pipeline(
     # 7) Audit (same snapshot set)
     snapshots = [{"match_id": match_id, "evidence_pack": _evidence_pack_to_dict(evidence_pack)}]
     audit_report = audit_snapshots(snapshots, current_policy, proposal.proposed_policy)
+    logs.append({"stage": "consensus", "status": "completed", "message": "Policy consensus computed"})
 
     # Build PipelineReport
     analysis_picks: Dict[str, Any] = {}
@@ -359,6 +365,7 @@ async def run_shadow_pipeline(
             "reason": activation_audits[0].get("activation_reason") if activation_audits and not activation_allowed_for_match else None,
             "audits": activation_audits,
         },
+        "logs": logs,
     }
     if dry_run:
         report["dry_run"] = True
@@ -458,7 +465,7 @@ async def _ensure_dummy_match(session: AsyncSession, match_id: str, kickoff: dat
     await session.flush()
 
 
-def _error_report(reason: str, detail: str) -> Dict[str, Any]:
+def _error_report(reason: str, detail: str, logs: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     return {
         "ingestion": {"payload_checksum": None, "collected_at": None},
         "analysis": {"snapshot_id": None, "markets_picks_confidences": {}},
@@ -468,4 +475,5 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
         "error": reason,
         "detail": detail,
+        "logs": logs if logs is not None else [],
     }

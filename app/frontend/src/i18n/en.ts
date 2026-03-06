@@ -83,6 +83,7 @@ export const en: Record<string, string> = {
   "section.decisions_controls": "Decisions Controls",
   "section.import_bundle": "Import / Bundle",
   "section.snapshots": "Snapshots",
+  "section.analysis_log": "Analysis Log",
   "label.status": "Status",
   "label.outcome": "Outcome",
   "label.home": "Home",
