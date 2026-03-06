@@ -308,10 +308,16 @@ fn run_autostart_flow(state: std::sync::Arc<BackendState>, exe_path: PathBuf) {
   try_spawn_and_health(state, exe_path, child_log);
 }
 
-/// Execute shadow pipeline (POST with no body). Returns response as structured JSON.
+/// Pipeline request timeout (seconds).
+const PIPELINE_TIMEOUT_SECS: u64 = 60;
+
+/// Execute shadow pipeline (POST with no body). Returns response as structured JSON. Kept for compatibility.
 #[tauri::command]
 async fn run_shadow_pipeline() -> Result<serde_json::Value, String> {
-  let client = reqwest::Client::new();
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(PIPELINE_TIMEOUT_SECS))
+    .build()
+    .map_err(|e| e.to_string())?;
   let response = client
     .post("http://127.0.0.1:8000/api/v1/pipeline/shadow/run")
     .send()
@@ -331,7 +337,10 @@ async fn run_shadow_pipeline() -> Result<serde_json::Value, String> {
 /// Run shadow pipeline via local backend (bypasses CORS). Payload and response are JSON.
 #[tauri::command]
 async fn shadow_run(payload: serde_json::Value) -> Result<serde_json::Value, String> {
-  let client = reqwest::Client::new();
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(PIPELINE_TIMEOUT_SECS))
+    .build()
+    .map_err(|e| e.to_string())?;
   let resp = client
     .post("http://127.0.0.1:8000/api/v1/pipeline/shadow/run")
     .json(&payload)
@@ -593,6 +602,7 @@ pub fn run() {
     .on_window_event(|_window, event| {
       if let tauri::WindowEvent::CloseRequested { .. } = event {
         remove_lock();
+        let _ = backend_manager::stop_backend();
       }
     })
     .run(tauri::generate_context!())

@@ -16,11 +16,6 @@ export type { ShadowPipelineRequest, ShadowPipelineReport };
 export async function runShadowPipeline(
   body: ShadowPipelineRequest
 ): Promise<ShadowPipelineReport> {
-  if (typeof window !== "undefined" && "__TAURI__" in window) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return (await invoke("run_shadow_pipeline")) as ShadowPipelineReport;
-  }
-
   const payload = {
     connector_name: body.connector_name ?? "sample_platform",
     match_id: body.match_id,
@@ -28,6 +23,14 @@ export async function runShadowPipeline(
     final_away_goals: body.final_away_goals ?? 0,
     status: body.status ?? "FINAL",
   };
+
+  if (typeof window !== "undefined" && "__TAURI__" in window) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const raw = await invoke("shadow_run", { payload });
+    if (raw != null && typeof raw === "object") return raw as ShadowPipelineReport;
+    throw new Error("PIPELINE_INVALID_DATA");
+  }
+
   return apiPost<ShadowPipelineReport>("/api/v1/pipeline/shadow/run", payload);
 }
 
@@ -56,6 +59,13 @@ export function pipelineReportToAnalyzeResponse(
   report: ShadowPipelineReport,
   matchId: string
 ): AnalyzeResponseFromPipeline {
+  const safe: AnalyzeResponseFromPipeline = {
+    status: "ERROR",
+    match_id: matchId,
+    resolver: { status: "UNKNOWN", match_id: matchId },
+    analyzer: { status: "UNKNOWN", decisions: [] },
+  };
+  if (report == null || typeof report !== "object") return safe;
   if (report.error) {
     return {
       status: "ERROR",
