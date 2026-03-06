@@ -662,7 +662,8 @@ function App() {
           setBackendReady(false);
           setBackendStatus("NOT_READY");
           const msg = e instanceof Error ? e.message : String(e);
-          setToast({ id: "backend-start", kind: "error", message: msg || t("backend.not_ready_message") });
+          if (msg) console.warn("[backend] ensure_backend_running failed:", msg);
+          setToast({ id: "backend-start", kind: "error", message: t("error.backend_not_started") });
         }
       });
     return () => {
@@ -1378,12 +1379,31 @@ function App() {
 
     try {
       const report = await runShadowPipeline(payload);
+      if (report == null || typeof report !== "object") {
+        console.warn("[pipeline] Invalid response shape:", report);
+        setResult(null);
+        setPipelineLogs([]);
+        setErrorKind("HTTP_ERROR");
+        setErrorMessage(t("error.pipeline_invalid_data"));
+        setLastErrorDebug({
+          httpStatus: 200,
+          endpoint,
+          timestamp,
+          home,
+          away,
+          responsePreview: String(report).slice(0, 512),
+        });
+        return;
+      }
       setPipelineLogs(Array.isArray(report.logs) ? report.logs : []);
       setHttpStatus(200);
       if (report.error) {
         setResult(null);
         setErrorKind("HTTP_ERROR");
-        setErrorMessage(report.detail || report.error);
+        setErrorMessage(t("error.analysis_failed"));
+        if (report.detail || report.error) {
+          console.warn("[pipeline] Backend error:", report.error, report.detail);
+        }
         setLastErrorDebug({
           httpStatus: 200,
           endpoint,
@@ -1407,8 +1427,16 @@ function App() {
         msg === "Failed to fetch" ||
         String(msg).toLowerCase().includes("econnrefused") ||
         String(msg).toLowerCase().includes("network");
+      const isInvalidData = msg === "PIPELINE_INVALID_DATA";
+      if (!isNetwork && !isInvalidData && msg) console.warn("[pipeline] Run failed:", msg);
       setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
-      setErrorMessage(isNetwork ? t("error.network") : msg);
+      setErrorMessage(
+        isNetwork
+          ? t("error.network")
+          : isInvalidData
+            ? t("error.pipeline_invalid_data")
+            : t("error.analysis_failed")
+      );
       setLastErrorDebug({
         httpStatus: null,
         endpoint,
