@@ -23,18 +23,18 @@ export async function runShadowPipeline(
     status: body.status ?? "FINAL",
   };
 
-  // Desktop (Tauri) path: use invoke to bypass WebView/network layer.
-  if (typeof window !== "undefined" && "__TAURI__" in window) {
+  try {
     const { invoke } = await import("@tauri-apps/api/core");
-    console.info("[pipeline] Using Tauri invoke shadow_run for Shadow Pipeline.");
-    const raw = await invoke("shadow_run", { payload });
+    console.info("[pipeline] Using Tauri invoke run_shadow_pipeline for Shadow Pipeline.");
+    const raw = await invoke("run_shadow_pipeline", { payload });
     if (raw != null && typeof raw === "object") return raw as ShadowPipelineReport;
     throw new Error("PIPELINE_INVALID_DATA");
+  } catch (e) {
+    console.warn("[pipeline] Shadow Pipeline invoke not available:", e);
+    // Shadow Pipeline is only supported in the desktop (Tauri) app. In pure browser
+    // environments we fail fast instead of attempting a direct fetch to localhost.
+    throw new Error("SHADOW_PIPELINE_DESKTOP_ONLY");
   }
-
-  // Shadow Pipeline is only supported in the desktop (Tauri) app. In pure browser
-  // environments we fail fast instead of attempting a direct fetch to localhost.
-  throw new Error("SHADOW_PIPELINE_DESKTOP_ONLY");
 }
 
 /** UI-facing response shape (matches existing result view). */
