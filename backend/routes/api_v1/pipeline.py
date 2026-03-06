@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +70,7 @@ async def shadow_run(
             status=status,
         )
         await session.commit()
-        return JSONResponse(status_code=200, content=report)
+        return JSONResponse(status_code=200, content=jsonable_encoder(report))
     except ValueError as e:
         logger.warning("Shadow run validation error: %s", e, exc_info=True)
         return _json_error(200, str(e), "VALIDATION_ERROR")

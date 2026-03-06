@@ -1,8 +1,10 @@
 import logging
 import os
+import traceback
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from core.config import get_settings
 from core.database import init_database, dispose_database
@@ -75,6 +77,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Ensure every unhandled exception returns JSON (never plain 'Internal Server Error')."""
+    logger.exception("Unhandled exception: %s", exc)
+    tb = traceback.format_exc()
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": str(exc) or "Internal server error",
+            "details": tb[:2000] if tb else None,
+        },
+    )
+
 
 app.include_router(api_v1_router)
 
