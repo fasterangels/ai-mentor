@@ -11,17 +11,39 @@ use std::{
 };
 
 fn spawn_packaged_backend(exe_dir: &Path) -> Option<Child> {
-    let sidecar = exe_dir.join("ai-mentor-backend.exe");
-    if sidecar.exists() {
-        println!("Starting packaged backend exe: {:?}", sidecar);
-        return Command::new(&sidecar)
+    // Prefer sidecar exe next to the main binary (dev + some packaged layouts).
+    let direct = exe_dir.join("ai-mentor-backend.exe");
+    if direct.exists() {
+        println!("Starting packaged backend exe (sidecar): {:?}", direct);
+        return Command::new(&direct)
             .spawn()
             .map_err(|e| {
-                eprintln!("Failed to spawn packaged backend exe: {e}");
+                eprintln!("Failed to spawn packaged backend exe (sidecar): {e}");
                 e
             })
             .ok();
     }
+
+    // When bundled with Tauri resources on Windows, files under "bundle.resources"
+    // (e.g. "bin/ai-mentor-backend.exe") are placed in a resources subfolder.
+    let resource_sidecar = exe_dir
+        .join("resources")
+        .join("bin")
+        .join("ai-mentor-backend.exe");
+    if resource_sidecar.exists() {
+        println!(
+            "Starting packaged backend exe (resources/bin): {:?}",
+            resource_sidecar
+        );
+        return Command::new(&resource_sidecar)
+            .spawn()
+            .map_err(|e| {
+                eprintln!("Failed to spawn packaged backend exe (resources/bin): {e}");
+                e
+            })
+            .ok();
+    }
+
     None
 }
 
