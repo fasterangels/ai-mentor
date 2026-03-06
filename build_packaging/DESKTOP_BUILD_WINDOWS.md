@@ -70,7 +70,7 @@ Run from the **repository root**:
 
 ```cmd
 :: 1) Backend sidecar EXE
-pyinstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+pyinstaller build_packaging\\backend_sidecar\\pyinstaller_sidecar.spec --noconfirm
 
 :: 2) Copy into Tauri bin (required name for Windows x64)
 mkdir app\frontend\src-tauri\bin 2>nul

@@ -12,7 +12,7 @@ It builds the sidecar, copies it here, and runs the Tauri build. See `packaging/
 
 1. Build the backend sidecar EXE (from repo root):
    ```
-   pyinstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+   pyinstaller build_packaging\\backend_sidecar\\pyinstaller_sidecar.spec --noconfirm
    ```
 2. Copy the output into this folder with the correct name:
    ```

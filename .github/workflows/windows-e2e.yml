@@ -24,7 +24,7 @@ jobs:
 
       - name: Build backend exe only (no Tauri, no NSIS)
         run: |
-          python -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+          python -m PyInstaller build_packaging\\backend_sidecar\\pyinstaller_sidecar.spec --noconfirm
 
       - name: Start backend and run canary (GET /health, OPTIONS /api/v1/analyze; POST returns 501)
         run: python packaging/canary_preflight.py

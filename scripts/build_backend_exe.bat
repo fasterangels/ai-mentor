@@ -5,7 +5,7 @@ REM Build the backend sidecar EXE with PyInstaller.
 REM Run from the repository root so the spec paths are correct.
 
 echo [backend] Building ai-mentor-backend.exe via PyInstaller...
-py -3.11 -m PyInstaller packaging\backend_sidecar\pyinstaller_sidecar.spec --noconfirm
+py -3.11 -m PyInstaller build_packaging\\backend_sidecar\\pyinstaller_sidecar.spec --noconfirm
 if errorlevel 1 (
   echo [backend] PyInstaller build failed.
   exit /b 1
