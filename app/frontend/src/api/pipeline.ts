@@ -3,7 +3,6 @@
  * Maps pipeline report to the UI's AnalyzeResponse shape (decisions, evaluation, audit).
  */
 
-import { apiPost } from "./client";
 import type {
   ShadowPipelineRequest,
   ShadowPipelineReport,
@@ -12,7 +11,7 @@ import type {
 
 export type { ShadowPipelineRequest, ShadowPipelineReport };
 
-/** Run shadow pipeline (single supported flow). In Tauri, uses invoke to bypass fetch/CORS. */
+/** Run shadow pipeline (single supported flow). Always uses Tauri invoke in the desktop app. */
 export async function runShadowPipeline(
   body: ShadowPipelineRequest
 ): Promise<ShadowPipelineReport> {
@@ -24,14 +23,18 @@ export async function runShadowPipeline(
     status: body.status ?? "FINAL",
   };
 
+  // Desktop (Tauri) path: use invoke to bypass WebView/network layer.
   if (typeof window !== "undefined" && "__TAURI__" in window) {
     const { invoke } = await import("@tauri-apps/api/core");
+    console.info("[pipeline] Using Tauri invoke shadow_run for Shadow Pipeline.");
     const raw = await invoke("shadow_run", { payload });
     if (raw != null && typeof raw === "object") return raw as ShadowPipelineReport;
     throw new Error("PIPELINE_INVALID_DATA");
   }
 
-  return apiPost<ShadowPipelineReport>("/api/v1/pipeline/shadow/run", payload);
+  // Shadow Pipeline is only supported in the desktop (Tauri) app. In pure browser
+  // environments we fail fast instead of attempting a direct fetch to localhost.
+  throw new Error("SHADOW_PIPELINE_DESKTOP_ONLY");
 }
 
 /** UI-facing response shape (matches existing result view). */
