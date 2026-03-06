@@ -349,10 +349,28 @@ async fn shadow_run(payload: serde_json::Value) -> Result<serde_json::Value, Str
     .map_err(|e| format!("request failed: {e}"))?;
 
   let status = resp.status();
-  let body = resp
-    .json::<serde_json::Value>()
+  let body_text = resp
+    .text()
     .await
-    .map_err(|e| format!("invalid json: {e}"))?;
+    .map_err(|e| format!("failed to read response body: {e}"))?;
+
+  let body: serde_json::Value = match serde_json::from_str(&body_text) {
+    Ok(v) => v,
+    Err(e) => {
+      let snippet: String = body_text.chars().take(500).collect();
+      let snippet_escaped = snippet.replace('\n', " ").replace('\r', " ");
+      return Err(format!(
+        "Pipeline returned invalid JSON response. status={}; parse_error={}; body_snippet={:?}",
+        status,
+        e,
+        if snippet_escaped.len() > 200 {
+          format!("{}...", &snippet_escaped[..200])
+        } else {
+          snippet_escaped
+        }
+      ));
+    }
+  };
 
   if !status.is_success() {
     return Err(format!("backend error {status}: {body}"));

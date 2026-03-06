@@ -1428,12 +1428,13 @@ function App() {
         String(msg).toLowerCase().includes("econnrefused") ||
         String(msg).toLowerCase().includes("network");
       const isInvalidData = msg === "PIPELINE_INVALID_DATA";
-      if (!isNetwork && !isInvalidData && msg) console.warn("[pipeline] Run failed:", msg);
+      const isInvalidJson = /Pipeline returned invalid JSON/i.test(msg);
+      if (!isNetwork && !isInvalidData && !isInvalidJson && msg) console.warn("[pipeline] Run failed:", msg);
       setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
       setErrorMessage(
         isNetwork
           ? t("error.network")
-          : isInvalidData
+          : isInvalidData || isInvalidJson
             ? t("error.pipeline_invalid_data")
             : t("error.analysis_failed")
       );
