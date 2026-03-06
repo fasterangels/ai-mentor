@@ -18,14 +18,7 @@ export async function runShadowPipeline(
 ): Promise<ShadowPipelineReport> {
   if (typeof window !== "undefined" && "__TAURI__" in window) {
     const { invoke } = await import("@tauri-apps/api/core");
-    const responseText = await invoke<string>("run_shadow_pipeline");
-    let data: ShadowPipelineReport;
-    try {
-      data = JSON.parse(responseText) as ShadowPipelineReport;
-    } catch (e) {
-      throw new Error("Backend returned non-JSON response: " + responseText);
-    }
-    return data;
+    return (await invoke("run_shadow_pipeline")) as ShadowPipelineReport;
   }
 
   const payload = {

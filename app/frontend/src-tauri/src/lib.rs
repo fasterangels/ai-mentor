@@ -308,17 +308,24 @@ fn run_autostart_flow(state: std::sync::Arc<BackendState>, exe_path: PathBuf) {
   try_spawn_and_health(state, exe_path, child_log);
 }
 
-/// Execute shadow pipeline (POST with no body). Returns response body as string.
+/// Execute shadow pipeline (POST with no body). Returns response as structured JSON.
 #[tauri::command]
-async fn run_shadow_pipeline() -> Result<String, String> {
+async fn run_shadow_pipeline() -> Result<serde_json::Value, String> {
   let client = reqwest::Client::new();
   let response = client
     .post("http://127.0.0.1:8000/api/v1/pipeline/shadow/run")
     .send()
     .await
     .map_err(|e| e.to_string())?;
-  let body = response.text().await.map_err(|e| e.to_string())?;
-  Ok(body)
+  let status = response.status();
+  let json: serde_json::Value = response
+    .json()
+    .await
+    .map_err(|e| e.to_string())?;
+  if !status.is_success() {
+    return Err(format!("backend error {status}: {json}"));
+  }
+  Ok(json)
 }
 
 /// Run shadow pipeline via local backend (bypasses CORS). Payload and response are JSON.
