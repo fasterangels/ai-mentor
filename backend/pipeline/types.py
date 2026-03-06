@@ -13,6 +13,7 @@ class PipelineInput:
     domains: List[str]  # e.g., ["fixtures", "stats"]
     window_hours: int = 72
     force_refresh: bool = False
+    connector_name: Optional[str] = None  # optional; passed to source query when set
 
 
 @dataclass

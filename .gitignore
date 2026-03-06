@@ -60,9 +60,15 @@ build/
 Thumbs.db
 desktop.ini
 
+# Runtime data (odds history, etc.)
+backend/runtime/
+
 # Logs
 *.log
 logs/
+
+# Tauri updater signing (do not commit .tauri/; public key is in tauri.conf.json)
+.tauri/
 
 # Temporary files
 *.tmp

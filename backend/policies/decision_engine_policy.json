@@ -1,0 +1,8 @@
+{
+  "thresholds": {
+    "A": 0.4,
+    "B": 0.4,
+    "default": 0.4
+  },
+  "version": "v1"
+}

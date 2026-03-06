@@ -84,6 +84,27 @@ async def test_shadow_pipeline_creates_analysis_run_and_resolution(test_db):
 
 
 @pytest.mark.asyncio
+async def test_shadow_pipeline_full_report_via_multi_source_framework(test_db):
+    """Shadow pipeline with dummy connector uses multi-source fetch (fixtures/stats) and produces full report."""
+    now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    async with get_database_manager().session() as session:
+        report = await run_shadow_pipeline(
+            session,
+            connector_name="dummy",
+            match_id="dummy-match-ms",
+            final_score={"home": 0, "away": 0},
+            status="FINAL",
+            now_utc=now,
+        )
+    assert "error" not in report or report.get("error") is None
+    assert report.get("ingestion", {}).get("payload_checksum") is not None
+    assert report.get("analysis", {}).get("decisions") is not None
+    assert report.get("resolution", {}).get("market_outcomes") is not None
+    assert report.get("evaluation_report_checksum") is not None
+    assert report.get("audit", {}).get("snapshots_checksum") is not None
+
+
+@pytest.mark.asyncio
 async def test_shadow_pipeline_report_sections_populated(test_db):
     """PipelineReport has all sections populated."""
     now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)

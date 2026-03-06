@@ -614,6 +614,7 @@ function App() {
   const [apiBase, setApiBase] = useState(getInitialApiBase);
   const [backendReady, setBackendReady] = useState(false);
   const [backendStatus, setBackendStatus] = useState<string | null>(null);
+  const [pipelineLogs, setPipelineLogs] = useState<Array<{ stage: string; status: string; message: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bundleFileInputRef = useRef<HTMLInputElement>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -642,10 +643,38 @@ function App() {
       .catch(() => setApiBase(DEFAULT_API_BASE));
   }, []);
 
-  // Desktop hardening: health check with backoff (1s, 2s, 4s; max 3). Non-blocking; Analyze disabled until ready.
-  const healthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tauri: on startup ensure backend is running via invoke, then set status. Reuse existing error card if ensure fails.
   useEffect(() => {
     if (!isTauri()) return;
+    let cancelled = false;
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke("ensure_backend_running").then(() => invoke<string>("backend_health"))
+      )
+      .then(() => {
+        if (!cancelled) {
+          setBackendReady(true);
+          setBackendStatus("READY");
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setBackendReady(false);
+          setBackendStatus("NOT_READY");
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg) console.warn("[backend] ensure_backend_running failed:", msg);
+          setToast({ id: "backend-start", kind: "error", message: t("error.backend_not_started") });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Desktop (non-Tauri): health check with backoff (1s, 2s, 4s; max 3). Non-blocking; Analyze disabled until ready.
+  const healthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isTauri()) return;
     const delays = [1000, 2000, 4000];
     let cancelled = false;
     const base = DEFAULT_API_BASE;
@@ -694,6 +723,33 @@ function App() {
     return () => {
       cancelled = true;
       clearInterval(id);
+    };
+  }, []);
+
+  // Tauri: periodic health check every 20s to keep status indicator accurate.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    const intervalId = setInterval(() => {
+      if (cancelled) return;
+      import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke<string>("backend_health"))
+        .then(() => {
+          if (!cancelled) {
+            setBackendReady(true);
+            setBackendStatus("READY");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBackendReady(false);
+            setBackendStatus("NOT_READY");
+          }
+        });
+    }, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -1323,11 +1379,31 @@ function App() {
 
     try {
       const report = await runShadowPipeline(payload);
+      if (report == null || typeof report !== "object") {
+        console.warn("[pipeline] Invalid response shape:", report);
+        setResult(null);
+        setPipelineLogs([]);
+        setErrorKind("HTTP_ERROR");
+        setErrorMessage(t("error.pipeline_invalid_data"));
+        setLastErrorDebug({
+          httpStatus: 200,
+          endpoint,
+          timestamp,
+          home,
+          away,
+          responsePreview: String(report).slice(0, 512),
+        });
+        return;
+      }
+      setPipelineLogs(Array.isArray(report.logs) ? report.logs : []);
       setHttpStatus(200);
       if (report.error) {
         setResult(null);
         setErrorKind("HTTP_ERROR");
-        setErrorMessage(report.detail || report.error);
+        setErrorMessage(t("error.analysis_failed"));
+        if (report.detail || report.error) {
+          console.warn("[pipeline] Backend error:", report.error, report.detail);
+        }
         setLastErrorDebug({
           httpStatus: 200,
           endpoint,
@@ -1351,8 +1427,17 @@ function App() {
         msg === "Failed to fetch" ||
         String(msg).toLowerCase().includes("econnrefused") ||
         String(msg).toLowerCase().includes("network");
+      const isInvalidData = msg === "PIPELINE_INVALID_DATA";
+      const isInvalidJson = /Pipeline returned invalid JSON/i.test(msg);
+      if (!isNetwork && !isInvalidData && !isInvalidJson && msg) console.warn("[pipeline] Run failed:", msg);
       setErrorKind(isNetwork ? "NETWORK_ERROR" : "HTTP_ERROR");
-      setErrorMessage(isNetwork ? t("error.network") : msg);
+      setErrorMessage(
+        isNetwork
+          ? t("error.network")
+          : isInvalidData || isInvalidJson
+            ? t("error.pipeline_invalid_data")
+            : t("error.analysis_failed")
+      );
       setLastErrorDebug({
         httpStatus: null,
         endpoint,
@@ -1368,6 +1453,7 @@ function App() {
 
   const clearResults = () => {
     setResult(null);
+    setPipelineLogs([]);
     setErrorMessage(null);
     setErrorKind(null);
     setHttpStatus(null);
@@ -1612,11 +1698,13 @@ function App() {
         showSearchInTopbar={view !== "HOME"}
         showStatusInTopbar={view !== "HOME"}
         statusLabel={
-          isTauri() && backendStatus?.startsWith("NOT_READY")
-            ? t("backend.status_not_ready")
-            : backendReady
-              ? t("topbar.status_ready")
-              : t("topbar.status_starting")
+          isTauri()
+            ? (backendReady ? t("backend.online") : t("backend.offline"))
+            : backendStatus?.startsWith("NOT_READY")
+              ? t("backend.status_not_ready")
+              : backendReady
+                ? t("topbar.status_ready")
+                : t("topbar.status_starting")
         }
       >
         {view === "HOME" && <HomeScreen onNavigate={setView} />}
@@ -1637,6 +1725,33 @@ function App() {
               <div className={emptyKind != null ? "ai-result-view-separator" : ""}>
                 <ResultView vm={mapApiToResultVM(result, { homeTeam: home, awayTeam: away })} onExport={handleExportResultSummary} />
               </div>
+              {pipelineLogs.length > 0 && (
+                <div className="ai-section ai-no-print">
+                  <div className="ai-card">
+                    <div className="ai-cardHeader"><div className="ai-cardTitle">{t("section.analysis_log")}</div></div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="ai-table" style={{ width: "100%", fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left" }}>Stage</th>
+                            <th style={{ textAlign: "left" }}>Status</th>
+                            <th style={{ textAlign: "left" }}>Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pipelineLogs.map((entry, i) => (
+                            <tr key={i}>
+                              <td>{entry.stage}</td>
+                              <td>{entry.status}</td>
+                              <td>{entry.message}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="ai-section ai-no-print">
                 <div className="ai-card">
                   <details>

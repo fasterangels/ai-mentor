@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { runShadowPipeline } from "@/api/analyzer";
+import { analyzeFootballMatch } from "@/api/football";
+import { footballAnalysisToMarketDecisions } from "@/services/footballDecisionAdapter";
 
 const COMPETITIONS = [
   { id: "league-a", name: "Λίγκα Α" },
@@ -28,26 +29,22 @@ export function NewPrediction() {
     setError(null);
     setSubmitting(true);
     try {
-      const report = await runShadowPipeline({
-        connector_name: "sample_platform",
-        match_id: "sample_platform_match_001",
-        final_home_goals: 0,
-        final_away_goals: 0,
-        status: "FINAL",
-      });
-      if (report.error) {
-        setError(report.detail || report.error);
-        return;
-      }
       const homeName = TEAMS.find((t) => t.id === homeTeamId)?.name ?? "—";
       const awayName = TEAMS.find((t) => t.id === awayTeamId)?.name ?? "—";
       const compName = COMPETITIONS.find((c) => c.id === competitionId)?.name ?? "—";
+      const query = `${homeName} ${awayName}`.trim() || "— —";
+      const result = await analyzeFootballMatch(query);
+      if ("error" in result) {
+        setError(result.error === "match_not_found" ? "Δεν βρέθηκε αγώνας" : result.error);
+        return;
+      }
+      const decisions = footballAnalysisToMarketDecisions(result.analysis);
       navigate("/prediction-result", {
         state: {
-          decisions: report.analysis?.decisions ?? [],
+          decisions,
           match: {
-            home: homeName,
-            away: awayName,
+            home: result.match?.home ?? homeName,
+            away: result.match?.away ?? awayName,
             date: matchDate ? new Date(matchDate).toLocaleDateString("el-GR") : new Date().toLocaleDateString("el-GR"),
             competition: compName,
           },

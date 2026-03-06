@@ -1,0 +1,15 @@
+[
+  {
+    "id": "manchester_united",
+    "name": "Manchester United",
+    "aliases": [
+      "Man United",
+      "Manchester Utd",
+      "Man Utd"
+    ],
+    "country": "England",
+    "league": "premier_league",
+    "stadium": "Old Trafford"
+  }
+]
+

@@ -1,0 +1,7 @@
+market,reason_code,age_band,total,correct,accuracy,neutral_rate,avg_confidence
+gg_ng,P(GG) proxy=0.05,2h-6h,1,0,0.0,0.0,1.0
+gg_ng,defensive strength present,2h-6h,1,0,0.0,0.0,1.0
+one_x_two,H2H used,2h-6h,1,1,1.0,0.0,0.7696
+one_x_two,top=HOME sep=0.13,2h-6h,1,1,1.0,0.0,0.7696
+over_under_25,expected goals above threshold,2h-6h,1,1,1.0,0.0,0.8948
+over_under_25,xG proxy=2.90,2h-6h,1,1,1.0,0.0,0.8948

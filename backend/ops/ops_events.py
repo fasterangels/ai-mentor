@@ -77,3 +77,364 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_evidence_ingestion_start(fixture_id: str, item_count: int) -> float:
+    """Log evidence ingestion start; return start time."""
+    _event("evidence_ingestion_start", fixture_id=fixture_id, item_count=item_count)
+    return time.perf_counter()
+
+
+def log_evidence_ingestion_end(
+    fixture_id: str,
+    duration_seconds: float,
+    items_written: int,
+    deduped: int,
+    conflict_detected: int,
+) -> None:
+    """Log evidence ingestion end with counts."""
+    _event(
+        "evidence_ingestion_end",
+        fixture_id=fixture_id,
+        duration_seconds=round(duration_seconds, 4),
+        evidence_items_written=items_written,
+        evidence_deduped=deduped,
+        evidence_conflict_detected=conflict_detected,
+    )
+
+
+def log_live_shadow_blocked_by_flag(detail: str) -> None:
+    """Emitted when live-shadow is requested but LIVE_IO_ALLOWED or SNAPSHOT_WRITES_ALLOWED is false."""
+    _event("live_shadow_blocked_by_flag", detail=detail)
+
+
+def log_live_shadow_ingestion_start(fixture_count: int) -> float:
+    """Log live shadow ingestion start; return start time."""
+    _event("live_shadow_ingestion_start", fixture_count=fixture_count)
+    return time.perf_counter()
+
+
+def log_live_shadow_ingestion_end(
+    duration_seconds: float,
+    snapshots_written: int,
+    deduped: int,
+    fetch_ok: int,
+    fetch_failed: int,
+) -> None:
+    """Log live shadow ingestion end with counts."""
+    _event(
+        "live_shadow_ingestion_end",
+        duration_seconds=round(duration_seconds, 4),
+        live_shadow_snapshots_written=snapshots_written,
+        live_shadow_deduped=deduped,
+        fetch_ok=fetch_ok,
+        fetch_failed=fetch_failed,
+    )
+
+
+def log_live_shadow_fetch_ok(fixture_id: str, latency_ms: float) -> None:
+    """Emitted when a live fetch for one fixture succeeded."""
+    _event("live_shadow_fetch_ok", fixture_id=fixture_id, latency_ms=round(latency_ms, 2))
+
+
+def log_live_shadow_fetch_failed(fixture_id: str, reason: str) -> None:
+    """Emitted when a live fetch for one fixture failed."""
+    _event("live_shadow_fetch_failed", fixture_id=fixture_id, reason=reason)
+
+
+def log_snapshot_write_start(snapshot_type: str, snapshot_id: str) -> float:
+    """Log snapshot write start; return start time for duration."""
+    _event("snapshot_write_start", snapshot_type=snapshot_type, snapshot_id=snapshot_id)
+    return time.perf_counter()
+
+
+def log_snapshot_write_end(
+    snapshot_type: str,
+    snapshot_id: str,
+    duration_seconds: float,
+) -> None:
+    """Log snapshot write end with duration."""
+    _event(
+        "snapshot_write_end",
+        snapshot_type=snapshot_type,
+        snapshot_id=snapshot_id,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_snapshot_envelope_missing_fields(missing_keys: list) -> None:
+    """Emitted when reading legacy snapshots and defaulting missing envelope fields."""
+    _event("snapshot_envelope_missing_fields", missing_keys=missing_keys)
+
+
+def log_snapshot_integrity_check_failed(
+    snapshot_id: str,
+    detail: str,
+) -> None:
+    """Emitted when envelope checksum mismatch detected. Does not fail pipeline by default."""
+    _event("snapshot_integrity_check_failed", snapshot_id=snapshot_id, detail=detail)
+
+
+def log_delta_eval_start() -> float:
+    """Log delta evaluation start; return start time for duration."""
+    _event("delta_eval_start")
+    return time.perf_counter()
+
+
+def log_delta_eval_end(
+    reports_count: int,
+    complete_count: int,
+    incomplete_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log delta evaluation end with counts and duration."""
+    _event(
+        "delta_eval_end",
+        reports_count=reports_count,
+        complete_count=complete_count,
+        incomplete_count=incomplete_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_delta_eval_incomplete(fixture_id: str, missing_side: str) -> None:
+    """Emitted when one side (recorded or live_shadow) is missing for a fixture."""
+    _event("delta_eval_incomplete", fixture_id=fixture_id, missing_side=missing_side)
+
+
+def log_delta_eval_written(count: int) -> None:
+    """Emitted when delta reports are written."""
+    _event("delta_eval_written", count=count)
+
+
+def log_staleness_eval_start() -> float:
+    """Log staleness evaluation start; return start time for duration."""
+    _event("staleness_eval_start")
+    return time.perf_counter()
+
+
+def log_staleness_eval_end(
+    row_count: int,
+    missing_timestamps_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log staleness evaluation end with counts and duration."""
+    _event(
+        "staleness_eval_end",
+        row_count=row_count,
+        missing_timestamps_count=missing_timestamps_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_staleness_eval_written(count: int) -> None:
+    """Emitted when staleness metrics reports are written."""
+    _event("staleness_eval_written", count=count)
+
+
+def log_staleness_eval_missing_timestamps(count: int) -> None:
+    """Emitted when legacy snapshots default (missing observed_at_utc)."""
+    _event("staleness_eval_missing_timestamps", count=count)
+
+
+def log_graduation_eval_start() -> float:
+    """Log graduation evaluation start; return start time for duration."""
+    _event("graduation_eval_start")
+    return time.perf_counter()
+
+
+def log_graduation_eval_end(
+    overall_pass: bool,
+    criteria_count: int,
+    duration_seconds: float,
+) -> None:
+    """Log graduation evaluation end with result and duration."""
+    _event(
+        "graduation_eval_end",
+        overall_pass=overall_pass,
+        criteria_count=criteria_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_graduation_eval_written(json_path: str, md_path: str) -> None:
+    """Emitted when graduation_result.json and graduation_result.md are written."""
+    _event("graduation_eval_written", json_path=json_path, md_path=md_path)
+
+
+def log_graduation_eval_failed_criteria(count: int) -> None:
+    """Emitted when one or more criteria failed (count of failed)."""
+    _event("graduation_eval_failed_criteria", count=count)
+
+
+def log_live_awareness_start(fixture_id: str) -> float:
+    """Log live awareness run start; return start time for duration."""
+    _event("live_awareness_start", fixture_id=fixture_id)
+    return time.perf_counter()
+
+
+def log_live_awareness_end(
+    fixture_id: str,
+    has_live_shadow: bool,
+    duration_seconds: float,
+) -> None:
+    """Log live awareness run end with result and duration."""
+    _event(
+        "live_awareness_end",
+        fixture_id=fixture_id,
+        has_live_shadow=has_live_shadow,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_live_awareness_written(json_path: str, md_path: str) -> None:
+    """Emitted when live_awareness.json and live_awareness.md are written."""
+    _event("live_awareness_written", json_path=json_path, md_path=md_path)
+
+
+def log_go_no_go_start() -> float:
+    """Log go/no-go run start; return start time for duration."""
+    _event("go_no_go_start")
+    return time.perf_counter()
+
+
+def log_go_no_go_end(decision: str, duration_seconds: float) -> None:
+    """Log go/no-go run end with decision and duration."""
+    _event("go_no_go_end", decision=decision, duration_seconds=round(duration_seconds, 4))
+
+
+def log_go_no_go_written(json_path: str, md_path: str) -> None:
+    """Emitted when go_no_go_decision.json and go_no_go_decision.md are written."""
+    _event("go_no_go_written", json_path=json_path, md_path=md_path)
+
+
+def log_worst_case_start(reports_path: str) -> float:
+    """Log worst-case tracking start; return start time for duration."""
+    _event("worst_case_start", reports_path=reports_path)
+    return time.perf_counter()
+
+
+def log_worst_case_end(
+    reports_path: str,
+    duration_seconds: float,
+    decisions_count: int = 0,
+    rows_written: int = 0,
+) -> None:
+    """Log worst-case tracking end with counts and duration."""
+    _event(
+        "worst_case_end",
+        reports_path=reports_path,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+        rows_written=rows_written,
+    )
+
+
+def log_worst_case_missing_inputs(detail: str) -> None:
+    """Emitted when worst-case run has no resolved evaluation data."""
+    _event("worst_case_missing_inputs", detail=detail)
+
+
+def log_worst_case_written(csv_path: str, json_path: str, rows_written: int) -> None:
+    """Emitted when worst_case_errors_top.csv and .json are written."""
+    _event("worst_case_written", csv_path=csv_path, json_path=json_path, rows_written=rows_written)
+
+
+def log_refusal_opt_start(reports_dir: str) -> float:
+    """Log refusal-optimize-shadow start; return start time for duration."""
+    _event("refusal_opt_start", reports_dir=reports_dir)
+    return time.perf_counter()
+
+
+def log_refusal_opt_end(
+    reports_dir: str,
+    duration_seconds: float,
+    decisions_count: int = 0,
+) -> None:
+    """Log refusal-optimize-shadow end with duration and count."""
+    _event(
+        "refusal_opt_end",
+        reports_dir=reports_dir,
+        duration_seconds=round(duration_seconds, 4),
+        decisions_count=decisions_count,
+    )
+
+
+def log_refusal_opt_missing_inputs(detail: str) -> None:
+    """Emitted when refusal-optimize run has no input decisions."""
+    _event("refusal_opt_missing_inputs", detail=detail)
+
+
+def log_refusal_opt_written(artifact_paths: list) -> None:
+    """Emitted when refusal optimization artifacts are written."""
+    _event("refusal_opt_written", artifact_paths=artifact_paths)
+
+
+def log_decay_fit_start() -> float:
+    """Log decay fit run start; return start time for duration."""
+    _event("decay_fit_start")
+    return time.perf_counter()
+
+
+def log_decay_fit_end(
+    params_count: int,
+    duration_seconds: float,
+    skipped_low_support: int = 0,
+) -> None:
+    """Log decay fit run end with counts and duration."""
+    _event(
+        "decay_fit_end",
+        params_count=params_count,
+        duration_seconds=round(duration_seconds, 4),
+        skipped_low_support=skipped_low_support,
+    )
+
+
+def log_decay_fit_skipped_low_support(count: int) -> None:
+    """Emitted when bands have support below MIN_SUPPORT and are skipped."""
+    _event("decay_fit_skipped_low_support", count=count)
+
+
+def log_decay_fit_written(count: int) -> None:
+    """Emitted when decay params artifacts are written."""
+    _event("decay_fit_written", count=count)
+
+
+def log_confidence_penalty_shadow_start() -> float:
+    """Log confidence penalty shadow run start; return start time for duration."""
+    _event("confidence_penalty_shadow_start")
+    return time.perf_counter()
+
+
+def log_confidence_penalty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log confidence penalty shadow run end with count and duration."""
+    _event(
+        "confidence_penalty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_confidence_penalty_shadow_written(row_count: int) -> None:
+    """Emitted when confidence_penalty_shadow.csv and .json are written."""
+    _event("confidence_penalty_shadow_written", row_count=row_count)
+
+
+def log_uncertainty_shadow_start() -> float:
+    """Log uncertainty shadow run start; return start time for duration."""
+    _event("uncertainty_shadow_start")
+    return time.perf_counter()
+
+
+def log_uncertainty_shadow_end(row_count: int, duration_seconds: float) -> None:
+    """Log uncertainty shadow run end with count and duration."""
+    _event(
+        "uncertainty_shadow_end",
+        row_count=row_count,
+        duration_seconds=round(duration_seconds, 4),
+    )
+
+
+def log_uncertainty_shadow_written(row_count: int) -> None:
+    """Emitted when uncertainty_shadow.csv and .json are written."""
+    _event("uncertainty_shadow_written", row_count=row_count)

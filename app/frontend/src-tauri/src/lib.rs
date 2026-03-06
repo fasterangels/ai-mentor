@@ -3,7 +3,10 @@
 
 use std::fs;
 use std::net::TcpListener;
+use std::process::Command;
+use std::thread;
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,6 +14,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+
+mod backend_manager;
 
 const LOCK_FILE_NAME: &str = "app.lock";
 const APP_LOG_NAME: &str = "app.log";
@@ -303,6 +308,76 @@ fn run_autostart_flow(state: std::sync::Arc<BackendState>, exe_path: PathBuf) {
   try_spawn_and_health(state, exe_path, child_log);
 }
 
+/// Pipeline request timeout (seconds).
+const PIPELINE_TIMEOUT_SECS: u64 = 60;
+
+/// Execute shadow pipeline (POST with no body). Returns response as structured JSON. Kept for compatibility.
+#[tauri::command]
+async fn run_shadow_pipeline() -> Result<serde_json::Value, String> {
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(PIPELINE_TIMEOUT_SECS))
+    .build()
+    .map_err(|e| e.to_string())?;
+  let response = client
+    .post("http://127.0.0.1:8000/api/v1/pipeline/shadow/run")
+    .send()
+    .await
+    .map_err(|e| e.to_string())?;
+  let status = response.status();
+  let json: serde_json::Value = response
+    .json()
+    .await
+    .map_err(|e| e.to_string())?;
+  if !status.is_success() {
+    return Err(format!("backend error {status}: {json}"));
+  }
+  Ok(json)
+}
+
+/// Run shadow pipeline via local backend (bypasses CORS). Payload and response are JSON.
+#[tauri::command]
+async fn shadow_run(payload: serde_json::Value) -> Result<serde_json::Value, String> {
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(PIPELINE_TIMEOUT_SECS))
+    .build()
+    .map_err(|e| e.to_string())?;
+  let resp = client
+    .post("http://127.0.0.1:8000/api/v1/pipeline/shadow/run")
+    .json(&payload)
+    .send()
+    .await
+    .map_err(|e| format!("request failed: {e}"))?;
+
+  let status = resp.status();
+  let body_text = resp
+    .text()
+    .await
+    .map_err(|e| format!("failed to read response body: {e}"))?;
+
+  let body: serde_json::Value = match serde_json::from_str(&body_text) {
+    Ok(v) => v,
+    Err(e) => {
+      let snippet: String = body_text.chars().take(500).collect();
+      let snippet_escaped = snippet.replace('\n', " ").replace('\r', " ");
+      return Err(format!(
+        "Pipeline returned invalid JSON response. status={}; parse_error={}; body_snippet={:?}",
+        status,
+        e,
+        if snippet_escaped.len() > 200 {
+          format!("{}...", &snippet_escaped[..200])
+        } else {
+          snippet_escaped
+        }
+      ));
+    }
+  };
+
+  if !status.is_success() {
+    return Err(format!("backend error {status}: {body}"));
+  }
+  Ok(body)
+}
+
 #[tauri::command]
 fn log_app_message(message: String) {
   app_log(&message);
@@ -422,6 +497,51 @@ fn open_logs_folder() -> Result<(), String> {
   Ok(())
 }
 
+/// Tauri command: ensure backend is running (start if needed, wait for health).
+#[tauri::command]
+fn ensure_backend_running() -> Result<(), String> {
+  backend_manager::start_backend_if_needed()
+}
+
+/// Tauri command: return /health response body as string, or error status.
+#[tauri::command]
+fn backend_health() -> Result<String, String> {
+  backend_manager::backend_health_response()
+}
+
+/// Tauri command: best-effort stop of the managed backend process.
+#[tauri::command]
+fn stop_backend() -> Result<(), String> {
+  backend_manager::stop_backend()
+}
+
+/// Start the Python backend (dev path) and block until /health returns success or timeout.
+fn start_backend_and_wait() {
+  let _child = Command::new("python")
+    .arg("../../backend/runner/start_backend.py")
+    .spawn();
+
+  let client = match reqwest::blocking::Client::builder()
+    .timeout(Duration::from_secs(2))
+    .build()
+  {
+    Ok(c) => c,
+    Err(_) => return,
+  };
+
+  for _ in 0..40 {
+    if let Ok(resp) = client.get(HEALTH_URL).send() {
+      if resp.status().is_success() {
+        app_log("Backend ready (health-check)");
+        return;
+      }
+    }
+    thread::sleep(Duration::from_millis(250));
+  }
+
+  app_log("Backend did not respond in time (health-check)");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   if let Err(e) = try_single_instance() {
@@ -434,8 +554,10 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .manage(backend_state.clone())
     .setup(|app| {
+      start_backend_and_wait();
       let build_id = std::env!("BUILD_ID");
       app_log(&format!("BUILD_ID={}", build_id));
       let exe_path = std::env::current_exe().unwrap_or_default();
@@ -464,9 +586,27 @@ pub fn run() {
         }
       }
 
+      // Silent auto-updater: check on startup, download/install if available (no UI, no block).
+      let handle = app.handle().clone();
+      tauri::async_runtime::spawn(async move {
+        if let Ok(updater) = handle.updater() {
+          if let Ok(Some(update)) = updater.check().await {
+            let _ = update
+              .download_and_install(|_chunk, _total| {}, || {})
+              .await;
+            let _ = handle.restart();
+          }
+        }
+      });
+
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      ensure_backend_running,
+      backend_health,
+      stop_backend,
+      run_shadow_pipeline,
+      shadow_run,
       log_app_message,
       get_backend_base_url,
       is_backend_ready,
@@ -480,6 +620,7 @@ pub fn run() {
     .on_window_event(|_window, event| {
       if let tauri::WindowEvent::CloseRequested { .. } = event {
         remove_lock();
+        let _ = backend_manager::stop_backend();
       }
     })
     .run(tauri::generate_context!())

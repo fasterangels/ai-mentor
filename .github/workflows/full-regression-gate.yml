@@ -1,0 +1,29 @@
+name: full-regression-gate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backend-tests-full-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend deps
+        run: |
+          python -m pip install -U pip
+          pip install -r backend/requirements.txt
+
+      - name: Run backend tests (full regression gate)
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m pytest backend/tests/ -v \
+            --ignore=backend/tests/unit/test_refusal_optimization_i3.py \
+            --ignore=backend/tests/unit/test_refusal_shadow_i3.py \
+            --ignore=backend/tests/test_operational_run_cli.py
+

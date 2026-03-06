@@ -15,6 +15,14 @@ from repositories.analysis_run_repo import AnalysisRunRepository
 from repositories.prediction_repo import PredictionRepository
 from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 
+from evaluation.reason_metrics import reason_metrics_for_report
+from evaluation.reason_failure_metrics import reason_failure_metrics_for_report
+from evaluation.error_taxonomy import error_taxonomy_for_report
+from evaluation.reason_reliability import compute_reason_reliability
+from evaluation.would_refuse import DecisionRecord, would_refuse_for_report
+from evaluation.decision_engine_eval import evaluate_decision_engine_with_policy
+from evaluation.refusal_tradeoff import TradeoffConfig, compute_tradeoff, extract_rows_for_tradeoff
+from backend.audit.system_audit import AuditConfig, generate_audit
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
@@ -64,10 +72,19 @@ async def build_evaluation_report(
         for m in MARKETS
     }
     reason_stats: Dict[str, Dict[str, Dict[str, int]]] = {}
+    reason_metrics_decisions: List[tuple] = []  # (market, reason_codes) per decision
+    reason_failure_decisions: List[tuple] = []  # (market, outcome, reason_codes) per decision
+    error_taxonomy_decisions: List[tuple] = []  # (market, outcome, confidence, reason_codes) per decision
+    would_refuse_decisions: List[DecisionRecord] = []
+    decision_engine_predictions: List[Dict[str, Any]] = []
 
     for run, res in resolved:
         try:
-            mo = json.loads(res.market_outcomes_json) if isinstance(res.market_outcomes_json, str) else (res.market_outcomes_json or {})
+            mo = (
+                json.loads(res.market_outcomes_json)
+                if isinstance(res.market_outcomes_json, str)
+                else (res.market_outcomes_json or {})
+            )
         except (TypeError, ValueError):
             mo = {}
         for m in MARKETS:
@@ -81,7 +98,13 @@ async def build_evaluation_report(
 
         preds = await pred_repo.list_by_analysis_run(run.id)
         market_to_confidence: Dict[str, float] = {}
-        key_map = {"1X2": "one_x_two", "OU25": "over_under_25", "OU_2.5": "over_under_25", "GGNG": "gg_ng", "BTTS": "gg_ng"}
+        key_map = {
+            "1X2": "one_x_two",
+            "OU25": "over_under_25",
+            "OU_2.5": "over_under_25",
+            "GGNG": "gg_ng",
+            "BTTS": "gg_ng",
+        }
         for p in preds:
             k = key_map.get((p.market or "").upper(), "")
             if k and k in MARKETS:
@@ -117,13 +140,43 @@ async def build_evaluation_report(
                         per_market_bands_fine[m][band_fine]["neutral_count"] += 1
 
         try:
-            reason_json = json.loads(res.reason_codes_by_market_json) if isinstance(res.reason_codes_by_market_json, str) else (res.reason_codes_by_market_json or {})
+            reason_json = (
+                json.loads(res.reason_codes_by_market_json)
+                if isinstance(res.reason_codes_by_market_json, str)
+                else (res.reason_codes_by_market_json or {})
+            )
         except (TypeError, ValueError):
             reason_json = {}
         for m in MARKETS:
             codes = reason_json.get(m) or []
             outcome = mo.get(m, "UNRESOLVED")
-            for code in codes:
+            conf = market_to_confidence.get(m)
+            codes_list = list(codes)
+            reason_metrics_decisions.append((m, codes_list))
+            reason_failure_decisions.append((m, outcome, codes_list))
+            error_taxonomy_decisions.append((m, outcome, conf, codes_list))
+            would_refuse_decisions.append(
+                DecisionRecord(
+                    market=m,
+                    outcome=outcome,
+                    confidence=conf,
+                    reason_codes=codes_list,
+                )
+            )
+            # Synthetic decision_engine prediction record for this market decision.
+            decision_engine_predictions.append(
+                {
+                    "id": getattr(run, "id", None),
+                    "market": m,
+                    "confidence": conf,
+                    "reason_codes": codes_list,
+                    # TODO: if we later compute reason_conflicts, populate here.
+                    "reason_conflicts": False,
+                    # Numeric outcome for training artifacts (1=success, 0=otherwise).
+                    "outcome": 1 if outcome == "SUCCESS" else 0 if outcome == "FAILURE" else None,
+                }
+            )
+            for code in codes_list:
                 if code not in reason_stats:
                     reason_stats[code] = {mm: {"success": 0, "failure": 0, "neutral": 0} for mm in MARKETS}
                 if m not in reason_stats[code]:
@@ -184,8 +237,78 @@ async def build_evaluation_report(
                 "success_rate": round(s / (s + f), 4) if (s + f) > 0 else None,
             }
 
-    return {
+    report: Dict[str, Any] = {
         "overall": {"total_snapshots": total_snapshots, "resolved_snapshots": resolved_snapshots},
         "per_market_accuracy": per_market_report,
         "reason_effectiveness": reason_effectiveness,
     }
+    rm_block = reason_metrics_for_report(reason_metrics_decisions)
+    report["reason_metrics"] = rm_block["reason_metrics"]
+    report.setdefault("meta", {})["reason_metrics_version"] = rm_block["meta"]["reason_metrics_version"]
+
+    rf_block = reason_failure_metrics_for_report(reason_failure_decisions)
+    report["reason_failure_metrics"] = rf_block["reason_failure_metrics"]
+    report.setdefault("meta", {})["reason_failure_metrics_version"] = rf_block["meta"]["reason_failure_metrics_version"]
+
+    et_block = error_taxonomy_for_report(error_taxonomy_decisions)
+    report["error_taxonomy"] = et_block["error_taxonomy"]
+    report.setdefault("meta", {})["error_taxonomy_version"] = et_block["meta"]["error_taxonomy_version"]
+
+    # Would-refuse simulator uses reason reliability; prefer existing block if present
+    reason_reliability_reason_centric = report.get("reason_reliability")
+    if not isinstance(reason_reliability_reason_centric, dict) or not reason_reliability_reason_centric:
+        reason_reliability_reason_centric = compute_reason_reliability(report["reason_failure_metrics"])
+
+    wr_block = would_refuse_for_report(
+        would_refuse_decisions,
+        reason_reliability=reason_reliability_reason_centric,
+    )
+    report["would_refuse_metrics"] = wr_block["would_refuse_metrics"]
+    report.setdefault("meta", {})["would_refuse_version"] = wr_block["meta"]["would_refuse_version"]
+
+    # Build a reason_reliability view suitable for the decision engine:
+    #   global: {reason: reliability}
+    #   per_market: {market: {reason: reliability}}
+    rr_global: Dict[str, float] = {}
+    rr_per_market: Dict[str, Dict[str, float]] = {}
+    for reason, entry in (reason_reliability_reason_centric or {}).items():
+        g = entry.get("global") or {}
+        rel_g = g.get("reliability")
+        if isinstance(rel_g, (int, float)):
+            rr_global[reason] = float(rel_g)
+        for market, m_stats in (entry.get("per_market") or {}).items():
+            rel_m = m_stats.get("reliability")
+            if isinstance(rel_m, (int, float)):
+                rr_per_market.setdefault(market, {})[reason] = float(rel_m)
+
+    reason_reliability_for_engine = {
+        "global": rr_global,
+        "per_market": rr_per_market,
+    }
+
+    de_metrics, de_outputs, policy_version, calibrator_version = evaluate_decision_engine_with_policy(
+        decision_engine_predictions,
+        reason_reliability_for_engine,
+    )
+    report["decision_engine_metrics"] = de_metrics
+    report["decision_engine_outputs"] = de_outputs
+    report.setdefault("meta", {})["decision_engine_version"] = de_metrics.get("version", "v0")
+    report.setdefault("meta", {})["decision_policy_version"] = policy_version
+    report.setdefault("meta", {})["calibrator_version"] = calibrator_version
+
+    # Refusal tradeoff metrics (coverage/precision/F1 curves) based on decision engine outputs.
+    tradeoff_rows = extract_rows_for_tradeoff(report)
+    if tradeoff_rows:
+        tradeoff_cfg = TradeoffConfig()
+        tradeoff_block = compute_tradeoff(tradeoff_rows, tradeoff_cfg)
+    else:
+        tradeoff_block = {"version": "v0", "global": {"points": []}, "per_market": {}}
+    report["refusal_tradeoff_metrics"] = tradeoff_block
+    report.setdefault("meta", {})["refusal_tradeoff_version"] = tradeoff_block.get("version", "v0")
+
+    # System self-audit summary and red flags (shadow-only).
+    audit = generate_audit(report, AuditConfig())
+    report["system_audit"] = audit
+    report.setdefault("meta", {})["system_audit_version"] = audit.get("version", "v0")
+
+    return report
