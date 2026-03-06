@@ -1,17 +1,27 @@
-//! Backend auto-start and process management for the Python FastAPI backend.
+//! Backend auto-start and process management for the FastAPI backend.
 //! Uses a global process handle and health checks with short timeouts.
+//!
+//! In dev, we spawn the Python backend via `backend/runner/start_backend.py`.
+//! In packaged Windows installs, we prefer the bundled `ai-mentor-backend.exe`
+//! sidecar (under `%LOCALAPPDATA%\AI_Mentor\service` or next to the Tauri exe).
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use crate::app_log;
+
 const HEALTH_URL: &str = "http://127.0.0.1:8000/health";
 const HEALTH_TIMEOUT_SECS: u64 = 4;
 const POLL_INTERVAL_MS: u64 = 250;
-const STARTUP_TIMEOUT_SECS: u64 = 10;
+const STARTUP_TIMEOUT_SECS: u64 = 20;
 
 static BACKEND_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+
+fn log(msg: &str) {
+    app_log(&format!("[backend_manager] {msg}"));
+}
 
 fn get_handle() -> &'static Mutex<Option<Child>> {
     BACKEND_CHILD.get_or_init(|| Mutex::new(None))
@@ -68,6 +78,10 @@ fn spawn_python_backend(repo_root: &std::path::Path) -> Result<Child, String> {
 
     #[cfg(windows)]
     let child = {
+        log(&format!(
+            "Spawning Python backend via script {}",
+            script.display()
+        ));
         let mut cmd = Command::new("py");
         cmd.arg("-3.11")
             .arg(&script)
@@ -81,6 +95,10 @@ fn spawn_python_backend(repo_root: &std::path::Path) -> Result<Child, String> {
 
     #[cfg(not(windows))]
     let child = {
+        log(&format!(
+            "Spawning Python backend via script {} (non-Windows)",
+            script.display()
+        ));
         let mut cmd = Command::new("python3");
         cmd.arg(&script)
             .current_dir(repo_root)
@@ -94,14 +112,108 @@ fn spawn_python_backend(repo_root: &std::path::Path) -> Result<Child, String> {
     Ok(child)
 }
 
-/// Start the backend if not already healthy. Spawns process and polls /health for up to ~10s.
+/// Candidate locations for the packaged backend sidecar exe (Windows installed app).
+#[cfg(windows)]
+fn sidecar_candidate_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // 1) Service location used by NSIS hooks: %LOCALAPPDATA%\AI_Mentor\service\ai-mentor-backend.exe
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let service = PathBuf::from(local_app_data)
+            .join("AI_Mentor")
+            .join("service")
+            .join("ai-mentor-backend.exe");
+        paths.push(service);
+    }
+
+    // 2) Next to the main binary or in resources/bin (Tauri bundle layouts).
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            paths.push(exe_dir.join("ai-mentor-backend.exe"));
+            paths.push(exe_dir.join("resources").join("ai-mentor-backend.exe"));
+            paths.push(
+                exe_dir
+                    .join("resources")
+                    .join("bin")
+                    .join("ai-mentor-backend.exe"),
+            );
+        }
+    }
+
+    paths
+}
+
+/// Try to spawn the packaged backend sidecar exe. Returns the child process on success.
+#[cfg(windows)]
+fn spawn_sidecar_backend() -> Result<Child, String> {
+    let candidates = sidecar_candidate_paths();
+    if candidates.is_empty() {
+        return Err("No sidecar candidate paths discovered".to_string());
+    }
+
+    log(&format!(
+        "Attempting to spawn sidecar backend from {} candidate paths",
+        candidates.len()
+    ));
+
+    for path in candidates {
+        if !path.exists() {
+            continue;
+        }
+        log(&format!(
+            "Trying sidecar backend exe at: {}",
+            path.display()
+        ));
+        let mut cmd = Command::new(&path);
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        match cmd.spawn() {
+            Ok(child) => {
+                log(&format!(
+                    "Spawned sidecar backend (pid={}) from {}",
+                    child.id(),
+                    path.display()
+                ));
+                return Ok(child);
+            }
+            Err(e) => {
+                log(&format!(
+                    "Failed to spawn sidecar backend at {}: {}",
+                    path.display(),
+                    e
+                ));
+            }
+        }
+    }
+
+    Err("Failed to spawn sidecar backend from any candidate path".to_string())
+}
+
+/// Spawn backend process depending on environment: prefer packaged sidecar exe on Windows,
+/// fall back to Python dev script when running from a repo checkout.
+fn spawn_backend_process() -> Result<Child, String> {
+    #[cfg(windows)]
+    {
+        if let Ok(child) = spawn_sidecar_backend() {
+            return Ok(child);
+        }
+        log("Sidecar backend spawn failed; falling back to Python dev backend if possible.");
+    }
+
+    let repo_root = repo_root_from_exe()
+        .ok_or_else(|| "Could not determine repo root (not running from target?)".to_string())?;
+    spawn_python_backend(&repo_root)
+}
+
+/// Start the backend if not already healthy. Spawns process and polls /health for up to ~20s.
 pub fn start_backend_if_needed() -> Result<(), String> {
+    log("start_backend_if_needed: checking backend health...");
     if check_health() {
+        log("start_backend_if_needed: backend already healthy; no spawn needed.");
         return Ok(());
     }
 
-    let repo_root = repo_root_from_exe().ok_or_else(|| "Could not determine repo root (not running from target?)".to_string())?;
-    let child = spawn_python_backend(&repo_root)?;
+    log("start_backend_if_needed: backend not healthy; attempting to spawn process...");
+    let child = spawn_backend_process()?;
 
     {
         let mut guard = get_handle().lock().map_err(|e| e.to_string())?;
@@ -111,9 +223,14 @@ pub fn start_backend_if_needed() -> Result<(), String> {
         *guard = Some(child);
     }
 
+    log(&format!(
+        "start_backend_if_needed: spawned backend; waiting up to {}s for /health...",
+        STARTUP_TIMEOUT_SECS
+    ));
     let deadline = Instant::now() + Duration::from_secs(STARTUP_TIMEOUT_SECS);
     while Instant::now() < deadline {
         if check_health() {
+            log("start_backend_if_needed: backend became healthy.");
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
@@ -123,7 +240,11 @@ pub fn start_backend_if_needed() -> Result<(), String> {
     if let Some(mut c) = guard.take() {
         let _ = c.kill();
     }
-    Err("Backend did not become healthy within 10 seconds".to_string())
+    log("start_backend_if_needed: backend did not become healthy within timeout; killed child.");
+    Err(format!(
+        "Backend did not become healthy within {} seconds",
+        STARTUP_TIMEOUT_SECS
+    ))
 }
 
 /// Returns true if GET /health responds OK.
@@ -156,3 +277,4 @@ pub fn backend_health_response() -> Result<String, String> {
         Err(format!("HTTP {}: {}", status.as_u16(), body))
     }
 }
+
