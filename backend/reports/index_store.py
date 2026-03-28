@@ -42,6 +42,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_burn_in_ops_run_id": None,
             "tuning_plan_runs": [],
             "latest_tuning_plan_run_id": None,
+            "staleness_eval_runs": [],
+            "latest_staleness_eval_run_id": None,
         }
     try:
         text = path.read_text(encoding="utf-8")
@@ -66,6 +68,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
             "latest_burn_in_ops_run_id": None,
             "tuning_plan_runs": [],
             "latest_tuning_plan_run_id": None,
+            "staleness_eval_runs": [],
+            "latest_staleness_eval_run_id": None,
         }
     runs = data.get("runs")
     if not isinstance(runs, list):
@@ -97,6 +101,9 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
     tuning_plan_runs = data.get("tuning_plan_runs")
     if not isinstance(tuning_plan_runs, list):
         tuning_plan_runs = []
+    staleness_eval_runs = data.get("staleness_eval_runs")
+    if not isinstance(staleness_eval_runs, list):
+        staleness_eval_runs = []
     return {
         "runs": runs,
         "latest_run_id": data.get("latest_run_id"),
@@ -117,6 +124,8 @@ def load_index(path: str | Path = "reports/index.json") -> Dict[str, Any]:
         "burn_in_ops_prune_log": burn_in_ops_prune_log,
         "tuning_plan_runs": tuning_plan_runs,
         "latest_tuning_plan_run_id": data.get("latest_tuning_plan_run_id"),
+        "staleness_eval_runs": staleness_eval_runs,
+        "latest_staleness_eval_run_id": data.get("latest_staleness_eval_run_id"),
     }
 
 
