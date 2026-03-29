@@ -13,13 +13,15 @@ from .analysis_run import AnalysisRun
 from .competition import Competition
 from .snapshot_resolution import SnapshotResolution
 from .fetch_log import SourceFetchLog
+from .injury_news_claim import InjuryNewsClaim
+from .injury_news_report import InjuryNewsReport
+from .injury_news_resolution import InjuryNewsResolution
 from .match import Match
 from .prediction import Prediction
 from .prediction_outcome import PredictionOutcome
 from .raw_payload import RawPayload
 from .season import Season
 from .source_mapping import SourceEntityMap
-from .snapshot_resolution import SnapshotResolution
 from .standings import StandingsRow, StandingsSnapshot
 from .team import Team
 from .team_alias import TeamAlias
@@ -31,13 +33,15 @@ __all__ = [
     "Competition",
     "SnapshotResolution",
     "SourceFetchLog",
+    "InjuryNewsClaim",
+    "InjuryNewsReport",
+    "InjuryNewsResolution",
     "Match",
     "Prediction",
     "PredictionOutcome",
     "RawPayload",
     "Season",
     "SourceEntityMap",
-    "SnapshotResolution",
     "StandingsRow",
     "StandingsSnapshot",
     "Team",
