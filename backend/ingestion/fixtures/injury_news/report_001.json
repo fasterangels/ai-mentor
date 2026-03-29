@@ -1,0 +1,18 @@
+{
+  "source_ref": "https://example.com/news/1",
+  "published_at": "2025-06-01T10:00:00+00:00",
+  "title": "Team A: Player X out for two weeks",
+  "body": "Midfielder X sustained an ankle injury in training. Expected return mid-June.",
+  "claims": [
+    {
+      "team_ref": "team_a",
+      "player_ref": "player_x",
+      "claim_type": "INJURY_STATUS",
+      "status": "OUT",
+      "validity": "RANGE",
+      "valid_from": "2025-06-01T00:00:00+00:00",
+      "valid_to": "2025-06-15T23:59:59+00:00",
+      "confidence": 0.9
+    }
+  ]
+}

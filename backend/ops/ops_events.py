@@ -77,3 +77,26 @@ def log_guardrail_trigger(
     if cap_value is not None:
         payload["cap_value"] = cap_value
     _event("guardrail_trigger", **payload)
+
+
+def log_injury_news_resolve_start(policy_version: str, scope: str, candidate_counts: int) -> None:
+    """Log injury/news resolver start (policy_version, scope, candidate_counts)."""
+    _event("injury_news_resolve_start", policy_version=policy_version, scope=scope, candidate_counts=candidate_counts)
+
+
+def log_injury_news_resolve_end(
+    policy_version: str,
+    resolutions_count: int,
+    conflicts_count: int,
+    stale_dropped: int,
+    low_conf_dropped: int,
+) -> None:
+    """Log injury/news resolver end (counts)."""
+    _event(
+        "injury_news_resolve_end",
+        policy_version=policy_version,
+        resolutions_count=resolutions_count,
+        conflicts_count=conflicts_count,
+        stale_dropped=stale_dropped,
+        low_conf_dropped=low_conf_dropped,
+    )

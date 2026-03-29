@@ -66,6 +66,32 @@ async def test_shadow_pipeline_sample_platform_produces_full_report(test_db) -> 
     assert "audit" in report
     assert "changed_count" in report["audit"]
     assert "snapshots_checksum" in report["audit"]
+    assert "injury_news_resolver" in report
+    assert isinstance(report["injury_news_resolver"], dict)
+
+
+@pytest.mark.asyncio
+async def test_shadow_pipeline_with_injury_news_resolver_enabled(test_db) -> None:
+    """With INJ_NEWS_ENABLED=1 resolver runs; report contains injury_news_resolver summary."""
+    now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("INJ_NEWS_ENABLED", "1")
+        async with get_database_manager().session() as session:
+            report = await run_shadow_pipeline(
+                session,
+                connector_name="sample_platform",
+                match_id="sample_platform_match_001",
+                final_score={"home": 2, "away": 1},
+                status="FINAL",
+                now_utc=now,
+            )
+    assert report.get("error") is None
+    assert "injury_news_resolver" in report
+    summary = report["injury_news_resolver"]
+    assert isinstance(summary, dict)
+    assert summary.get("policy_version") == "injury_news.v1"
+    assert "resolutions_count" in summary
+    assert "candidate_counts" in summary
 
 
 @pytest.mark.asyncio
