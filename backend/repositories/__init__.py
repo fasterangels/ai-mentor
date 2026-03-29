@@ -20,6 +20,7 @@ from .analysis_run_repo import AnalysisRunRepository
 from .prediction_repo import PredictionRepository
 from .prediction_outcome_repo import PredictionOutcomeRepository
 from .snapshot_resolution_repo import SnapshotResolutionRepository
+from .evidence_repo import EvidenceRepository
 
 __all__ = [
     "BaseRepository",
@@ -35,4 +36,5 @@ __all__ = [
     "PredictionRepository",
     "PredictionOutcomeRepository",
     "SnapshotResolutionRepository",
+    "EvidenceRepository",
 ]
