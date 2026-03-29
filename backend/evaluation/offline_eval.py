@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,11 +18,27 @@ from repositories.snapshot_resolution_repo import SnapshotResolutionRepository
 CONFIDENCE_BANDS = [(0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.00)]
 # Finer bands (0.00-0.10, ..., 0.90-1.00) for Phase E; deterministic ordering
 CONFIDENCE_BANDS_FINE = [(i * 0.1, (i + 1) * 0.1) for i in range(10)]
+# Calibration summary bands (fixed; deterministic ordering)
+CALIBRATION_BANDS = [(0.0, 0.49), (0.50, 0.59), (0.60, 0.69), (0.70, 0.79), (0.80, 1.00)]
+CALIBRATION_BAND_LABELS = [f"{lo:.2f}-{hi:.2f}" for lo, hi in CALIBRATION_BANDS]
 MARKETS = ("one_x_two", "over_under_25", "gg_ng")
 
 
 def _band_label(lo: float, hi: float) -> str:
     return f"{lo:.2f}-{hi:.2f}"
+
+
+def _calibration_band_for_confidence(c: float) -> Optional[str]:
+    """Return band label for confidence c; None if c is None or out of [0,1]. Bands inclusive [lo, hi]. Deterministic."""
+    if c is None:
+        return None
+    c = float(c)
+    if c < 0.0 or c > 1.0:
+        return None
+    for i, (lo, hi) in enumerate(CALIBRATION_BANDS):
+        if lo <= c <= hi:
+            return CALIBRATION_BAND_LABELS[i]
+    return None
 
 
 async def build_evaluation_report(
@@ -64,6 +80,15 @@ async def build_evaluation_report(
         for m in MARKETS
     }
     reason_stats: Dict[str, Dict[str, Dict[str, int]]] = {}
+    # Calibration: per market and overall, per band -> count, success, failure, neutral, sum_confidence
+    cal_bands_label = CALIBRATION_BAND_LABELS
+    cal_per_market: Dict[str, Dict[str, Dict[str, Any]]] = {
+        m: {b: {"count_predictions": 0, "success_count": 0, "failure_count": 0, "neutral_count": 0, "sum_confidence": 0.0} for b in cal_bands_label}
+        for m in MARKETS
+    }
+    cal_overall: Dict[str, Dict[str, Any]] = {b: {"count_predictions": 0, "success_count": 0, "failure_count": 0, "neutral_count": 0, "sum_confidence": 0.0} for b in cal_bands_label}
+    # Brier: (p, y) per market; y=1 if SUCCESS else 0, only when outcome in (SUCCESS, FAILURE)
+    brier_py_per_market: Dict[str, List[Tuple[float, int]]] = {m: [] for m in MARKETS}
 
     for run, res in resolved:
         try:
@@ -115,6 +140,25 @@ async def build_evaluation_report(
                         per_market_bands_fine[m][band_fine]["failure_count"] += 1
                     else:
                         per_market_bands_fine[m][band_fine]["neutral_count"] += 1
+            # Calibration bands and Brier
+            cal_band = _calibration_band_for_confidence(c) if c is not None else None
+            if cal_band and cal_band in cal_per_market[m]:
+                outcome = mo.get(m, "UNRESOLVED")
+                cal_per_market[m][cal_band]["count_predictions"] += 1
+                cal_per_market[m][cal_band]["sum_confidence"] += c
+                cal_overall[cal_band]["count_predictions"] += 1
+                cal_overall[cal_band]["sum_confidence"] += c
+                if outcome == "SUCCESS":
+                    cal_per_market[m][cal_band]["success_count"] += 1
+                    cal_overall[cal_band]["success_count"] += 1
+                elif outcome == "FAILURE":
+                    cal_per_market[m][cal_band]["failure_count"] += 1
+                    cal_overall[cal_band]["failure_count"] += 1
+                else:
+                    cal_per_market[m][cal_band]["neutral_count"] += 1
+                    cal_overall[cal_band]["neutral_count"] += 1
+                if outcome in ("SUCCESS", "FAILURE"):
+                    brier_py_per_market[m].append((c, 1 if outcome == "SUCCESS" else 0))
 
         try:
             reason_json = json.loads(res.reason_codes_by_market_json) if isinstance(res.reason_codes_by_market_json, str) else (res.reason_codes_by_market_json or {})
@@ -184,8 +228,55 @@ async def build_evaluation_report(
                 "success_rate": round(s / (s + f), 4) if (s + f) > 0 else None,
             }
 
+    # Build calibration_summary (deterministic ordering: bands, then markets)
+    def _band_summary(d: Dict[str, Any]) -> Dict[str, Any]:
+        n = d["count_predictions"]
+        s, f, neut = d["success_count"], d["failure_count"], d["neutral_count"]
+        acc = round(s / (s + f), 4) if (s + f) > 0 else None
+        avg_conf = round(d["sum_confidence"] / n, 4) if n > 0 else None
+        return {
+            "count_predictions": n,
+            "accuracy": acc,
+            "neutral_count": neut,
+            "average_confidence": avg_conf,
+        }
+
+    confidence_bands: Dict[str, Any] = {}
+    for m in MARKETS:
+        confidence_bands[m] = {}
+        for b in cal_bands_label:
+            if cal_per_market[m][b]["count_predictions"] > 0:
+                confidence_bands[m][b] = _band_summary(cal_per_market[m][b])
+    confidence_bands["overall"] = {}
+    for b in cal_bands_label:
+        if cal_overall[b]["count_predictions"] > 0:
+            confidence_bands["overall"][b] = _band_summary(cal_overall[b])
+
+    def _brier(py_list: List[Tuple[float, int]]) -> Optional[float]:
+        if not py_list:
+            return None
+        return round(sum((p - y) ** 2 for p, y in py_list) / len(py_list), 4)
+
+    brier_by_market: Dict[str, Any] = {}
+    all_py: List[Tuple[float, int]] = []
+    for m in MARKETS:
+        b = _brier(brier_py_per_market[m])
+        if b is not None:
+            brier_by_market[m] = b
+        all_py.extend(brier_py_per_market[m])
+    brier_overall = _brier(all_py)
+
+    calibration_summary: Dict[str, Any] = {
+        "confidence_bands": confidence_bands,
+        "brier_scores": {
+            "brier_by_market": brier_by_market,
+            "brier_overall": brier_overall,
+        },
+    }
+
     return {
         "overall": {"total_snapshots": total_snapshots, "resolved_snapshots": resolved_snapshots},
         "per_market_accuracy": per_market_report,
         "reason_effectiveness": reason_effectiveness,
+        "calibration_summary": calibration_summary,
     }
