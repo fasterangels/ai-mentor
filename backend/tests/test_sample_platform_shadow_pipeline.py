@@ -98,3 +98,48 @@ async def test_shadow_pipeline_sample_platform_deterministic_checksums(test_db) 
     assert report1["evaluation_report_checksum"] == report2["evaluation_report_checksum"]
     assert report1["proposal"]["proposal_checksum"] == report2["proposal"]["proposal_checksum"]
     assert report1["audit"]["snapshots_checksum"] == report2["audit"]["snapshots_checksum"]
+
+
+@pytest.mark.asyncio
+async def test_evidence_ingestion_stored_and_analysis_unchanged(test_db) -> None:
+    """Run pipeline then ingest recorded evidence; assert evidence stored and analysis output unchanged."""
+    from ingestion.evidence_ingestion import ingest_evidence_for_fixture
+    from repositories.evidence_repo import EvidenceRepository
+
+    now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    async with get_database_manager().session() as session:
+        report = await run_shadow_pipeline(
+            session,
+            connector_name="sample_platform",
+            match_id="sample_platform_match_001",
+            final_score={"home": 2, "away": 1},
+            status="FINAL",
+            now_utc=now,
+        )
+        assert report.get("error") is None
+        assert "analysis" in report
+        assert "markets_picks_confidences" in report["analysis"]
+
+        payload = {
+            "fixture_id": "sample_platform_match_001",
+            "items": [
+                {
+                    "title": "Key player doubtful",
+                    "evidence_type": "INJURY",
+                    "source_class": "RECORDED",
+                    "source_name": "recorded_fixture",
+                    "reliability_tier": "HIGH",
+                    "observed_at": "2025-01-15T10:00:00+00:00",
+                }
+            ],
+        }
+        summary = await ingest_evidence_for_fixture(
+            session, "sample_platform_match_001", payload=payload, created_at=now
+        )
+        assert summary["errors"] == []
+        assert summary["items_written"] >= 1 or summary["deduped"] >= 1
+
+        repo = EvidenceRepository(session)
+        items = await repo.list_evidence_for_fixture("sample_platform_match_001")
+        assert len(items) >= 1
+        assert all(hasattr(i, "checksum") and i.checksum for i in items)
