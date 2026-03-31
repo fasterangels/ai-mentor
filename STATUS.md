@@ -14,3 +14,5 @@
 ## Verification
 - CI tests enforce `/api/v1/analyze` 501 contract and OpenAPI exclusion
 - CI verifies pipeline/evaluation/tuner regression gates
+
+See [BASELINE.md](BASELINE.md) for copy-paste run commands.
