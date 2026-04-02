@@ -21,6 +21,8 @@ from policy.policy_runtime import get_active_policy, min_confidence_from_policy
 from policy.policy_store import checksum_report
 from policy.tuner import run_tuner, PolicyProposal
 from policy.audit import audit_snapshots
+from policy.replay import run_replay
+from policy.tuner_impact import build_tuner_proposal_diff, build_tuner_impact_by_market
 from services.result_attach_service import attach_result
 from ops.ops_events import (
     log_pipeline_start,
@@ -302,6 +304,16 @@ async def run_shadow_pipeline(
     # 7) Audit (same snapshot set)
     snapshots = [{"match_id": match_id, "evidence_pack": _evidence_pack_to_dict(evidence_pack)}]
     audit_report = audit_snapshots(snapshots, current_policy, proposal.proposed_policy)
+    replay_report = run_replay(snapshots, current_policy, proposal.proposed_policy)
+
+    # Tuner impact reporting (bounded, deterministic)
+    tuner_proposal_diff = build_tuner_proposal_diff(
+        current_policy.meta.version,
+        proposal.proposed_policy.meta.version,
+        proposal.diffs,
+        getattr(proposal, "tuner_constraints_summary", None),
+    )
+    tuner_impact_by_market = build_tuner_impact_by_market(eval_report, replay_report)
 
     # Build PipelineReport
     analysis_picks: Dict[str, Any] = {}
@@ -332,7 +344,10 @@ async def run_shadow_pipeline(
             "diffs": [list(d) for d in proposal.diffs],
             "guardrails_results": [list(g) for g in proposal.guardrails_results],
             "proposal_checksum": proposal_checksum,
+            "tuner_constraints_summary": getattr(proposal, "tuner_constraints_summary", None) or {},
         },
+        "tuner_proposal_diff": tuner_proposal_diff,
+        "tuner_impact_by_market": tuner_impact_by_market,
         "audit": {
             "changed_count": audit_report["summary"]["changed_count"],
             "per_market_change_count": audit_report["summary"]["per_market_change_count"],
@@ -450,7 +465,9 @@ def _error_report(reason: str, detail: str) -> Dict[str, Any]:
         "analysis": {"snapshot_id": None, "markets_picks_confidences": {}},
         "resolution": {"market_outcomes": {}},
         "evaluation_report_checksum": None,
-        "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None},
+        "proposal": {"diffs": [], "guardrails_results": [], "proposal_checksum": None, "tuner_constraints_summary": {}},
+        "tuner_proposal_diff": {"policy_from_version": "", "policy_to_version": "", "params_changed_count": 0, "top_changes": [], "constraints_applied": {}},
+        "tuner_impact_by_market": {},
         "audit": {"changed_count": 0, "per_market_change_count": {}, "snapshots_checksum": None, "current_policy_checksum": None, "proposed_policy_checksum": None},
         "error": reason,
         "detail": detail,
